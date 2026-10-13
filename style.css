@@ -536,6 +536,7 @@ body {
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-height: 0;
     position: relative;
     overflow: hidden;
 }
@@ -704,13 +705,17 @@ body {
    ========================================================================== */
 
 .chat-container {
-    flex: 1;
+    flex: 1 1 0%;
+    min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 30px 24px;
     display: flex;
     flex-direction: column;
     scroll-behavior: smooth;
     position: relative;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
 }
 
 /* Welcome Hero Screen */
@@ -2114,18 +2119,24 @@ select {
         flex-direction: column !important;
         overflow: hidden !important;
         background: transparent !important;
+        touch-action: pan-y !important;
     }
 
     .main-content {
         height: 100% !important;
+        min-height: 0 !important;
+        flex: 1 1 0% !important;
         display: flex !important;
         flex-direction: column !important;
         overflow: hidden !important;
         background: transparent !important;
+        position: relative !important;
+        touch-action: pan-y !important;
     }
 
     /* 2. Sleek Mobile Header (True App Bar) */
     .top-nav {
+        flex-shrink: 0 !important;
         height: 54px !important;
         min-height: 54px !important;
         padding: 0 14px !important;
@@ -2234,12 +2245,18 @@ select {
 
     /* 3. Chat Area & Smooth Scrolling */
     .chat-container {
-        padding: 10px 12px !important;
-        flex: 1 !important;
+        padding: 12px 14px 20px 14px !important;
+        flex: 1 1 0% !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        max-height: 100% !important;
         overflow-y: auto !important;
+        overflow-x: hidden !important;
         -webkit-overflow-scrolling: touch !important;
-        overscroll-behavior: contain !important;
+        overscroll-behavior-y: auto !important;
+        touch-action: pan-y !important;
         background: transparent !important;
+        box-sizing: border-box !important;
     }
 
     /* 4. Hero Welcome Screen */
@@ -2410,6 +2427,7 @@ select {
 
     /* 7. Native Bottom Command Input Center */
     .input-section {
+        flex-shrink: 0 !important;
         padding: 7px 10px !important;
         padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
         background: #0a0b10 !important;
