@@ -1206,6 +1206,49 @@ body {
     overflow: hidden;
 }
 
+/* Structured AI Typography inside Bubbles */
+.message-bubble h1,
+.message-bubble h2,
+.message-bubble h3 {
+    margin: 10px 0 6px 0;
+    color: #f8fafc;
+    font-weight: 800;
+    line-height: 1.35;
+}
+
+.message-bubble h1 { font-size: 17px; }
+.message-bubble h2 { font-size: 15.5px; }
+.message-bubble h3 { font-size: 14.5px; }
+
+.message-bubble p {
+    margin: 4px 0 8px 0;
+    line-height: 1.65;
+}
+
+.message-bubble p:last-child {
+    margin-bottom: 0;
+}
+
+.message-bubble ul,
+.message-bubble ol {
+    margin: 6px 0 10px 0;
+    padding-right: 22px;
+    padding-left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.message-bubble li {
+    line-height: 1.6;
+    margin-bottom: 2px;
+}
+
+.message-bubble strong {
+    color: #f8fafc;
+    font-weight: 700;
+}
+
 /* High-Gloss CC Light Sweep Specular Sheen */
 .message-bubble::after {
     content: '';
@@ -1451,14 +1494,16 @@ p code {
 .chai-brewing-loader {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 6px 4px;
+    gap: 12px;
+    padding: 4px 2px;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .brewing-cup {
     position: relative;
-    width: 34px;
-    height: 42px;
+    width: 30px;
+    height: 38px;
     border: 2px solid rgba(245, 158, 11, 0.85);
     border-radius: 4px 4px 12px 12px;
     background: rgba(10, 13, 23, 0.7);
@@ -2423,6 +2468,18 @@ select {
         font-size: 13.5px !important;
         line-height: 1.55 !important;
         border-radius: 15px !important;
+    }
+
+    .brewing-text {
+        font-size: 12px !important;
+        line-height: 1.35 !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+    }
+
+    .brewing-progress-bar {
+        width: 100% !important;
+        max-width: 140px !important;
     }
 
     /* 7. Native Bottom Command Input Center */

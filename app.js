@@ -9,10 +9,9 @@ const _k2 = "omwjk7_PQMe_9NiY3vazgj8tlsVjsBw";
 const GEMINI_API_KEY = _k1 + _k2;
 
 const MODELS = [
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite-preview",
     "gemini-3-flash-preview",
-    "gemini-flash-latest"
+    "gemini-flash-latest",
+    "gemini-3.5-flash"
 ];
 
 // ----------------- State Management -----------------
@@ -762,7 +761,7 @@ function showLoadingSkeleton() {
                         <div class="brewing-bubble b3"></div>
                     </div>
                     <div class="brewing-info">
-                        <div class="brewing-text">صب كوباية شاي في الخمسينة.. جاري التفكير بروقان ☕</div>
+                        <div class="brewing-text">جاري تحضير الرد بروقان ☕...</div>
                         <div class="brewing-progress-bar"><div class="brewing-progress-glow"></div></div>
                     </div>
                 </div>
@@ -787,12 +786,13 @@ function scrollToBottom() {
 
 function getPersonaInstruction() {
     return (
-        "أنت 'شاي GPT' (ChaiGPT) ☕ - المساعد المصري الذكي الخارق، أروق وأذكى رفيق ذكاء اصطناعي معمول لحل المشاكل والفضفضة والبرمجة والتفكير الإبداعي بروقان زي كوباية شاي في الخمسينة!\n\n" +
+        "أنت 'شاي GPT' (ChaiGPT) ☕ - المساعد المصري الذكي الخارق، أروق وأذكى رفيق ذكاء اصطناعي.\n\n" +
         "القواعد الأساسية الصارمة:\n" +
-        "1. اللغة واللهجة: يجب أن تجيب دائماً وأبداً باللغة العربية وباللهجة المصرية الأصيلة والودودة والذكية (زي ChatGPT المصري تماماً). استخدم أسلوب راقي ومريح ولطيف (مثل: يا باشا، يا غالي، يا كبير، تسلم، عينيا ليك، منور، كله تمام، وغيرها).\n" +
-        "2. ممنوع الرد بالإنجليزية: حتى لو المستخدم كتب مصطلحات إنجليزية أو سألك عن كود أو تقنية أو مصطلحات أجنبية، اشرح دائماً بالعربي المصري المفهوم والممتع، واكتب الأكواد مع شرحها بالعربي. لا تجب باللغة الإنجليزية أبداً إلا إذا قال لك المستخدم صراحة 'ترجم للإنجليزي' أو طلب رداً بالإنجليزي تحديداً.\n" +
-        "3. الذاكرة والترابط: أنت تتذكر بدقة كامل سياق المحادثة وتبني ردودك وتربطها بما ذكره المستخدم سابقاً.\n" +
-        "4. الذكاء والوضوح: قدم معلومات دقيقة ومفيدة ومنظمة بنقاط وعناوين واضحة وبأسلوب جذاب ومحبوب."
+        "1. المباشرة والتركيز (بدون رغي ولا لف ودوران): ادخل في صلب الإجابة مباشرة بدون مقدمات طويلة ولا حشو ولا جمل إنشائية مكررة. جاوب بذكاء وإيجاز شافي ووافي.\n" +
+        "2. التنسيق المرتب المريح للعين: نسق إجابتك دائماً بعناوين فرعية واضحة (###) ونقاط محددة (- أو 1.) وفقرات قصيرة. ممنوع سرد الكلام ككتلة واحدة غير مقروءة.\n" +
+        "3. اللهجة والأسلوب: تحدث باللهجة المصرية الذكية والودودة بطبيعية تامة (مثل: يا باشا، يا غالي، تسلم، عينيا، كله تمام)، بدون مبالغة أو افتعال.\n" +
+        "4. الأكواد والبرمجة: قدم كود نظيف واحترافي مباشرة مع شرح سطري موجز جداً.\n" +
+        "5. لا تتحدث بالإنجليزية إلا إذا طُلب منك صراحة الترجمة للإنجليزية."
     );
 }
 
@@ -831,7 +831,7 @@ async function sendPromptToGemini(userText, mediaObj = null) {
 
     const promptText = (userText || "أجب عن سؤالي بذكاء وبالمصري.").trim();
     const isExplicitEnglish = promptText.includes("ترجم للإنجليزي") || promptText.includes("write in english") || promptText.includes("translate to english");
-    const langDirective = isExplicitEnglish ? "" : "\n\n(توجيه إلزامي: أجب باللغة العربية حصراً وباللهجة المصرية الحية الذكية مثل ChatGPT المصري تماماً).";
+    const langDirective = isExplicitEnglish ? "" : "\n\n(توجيه: جاوب بالمصري الذكي، باختصار وتركيز وبدون رغي زائد، ورتب إجابتك في نقاط واضحة).";
 
     currentParts.push({
         text: promptText + langDirective
@@ -854,7 +854,7 @@ async function sendPromptToGemini(userText, mediaObj = null) {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 7000);
+            const timeoutId = setTimeout(() => controller.abort(), 3500);
 
             const res = await fetch(url, {
                 method: 'POST',
@@ -1300,13 +1300,14 @@ function closeLightbox() {
 
 function formatMarkdown(text) {
     if (!text) return '';
-    let html = escapeHtml(text);
 
-    // Code blocks with syntax copy button
-    html = html.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+    // Extract code blocks first to protect them from inline formatting
+    const codeBlocks = [];
+    let processed = text.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
         const langLabel = lang || 'code';
         const codeId = 'code_' + Math.random().toString(36).substr(2, 9);
-        return `
+        const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+        codeBlocks.push(`
             <div class="code-block">
                 <div class="code-header">
                     <span>${langLabel}</span>
@@ -1314,28 +1315,73 @@ function formatMarkdown(text) {
                         ${ICONS.copy} نسخ الكود
                     </button>
                 </div>
-                <pre><code id="${codeId}">${code.trim()}</code></pre>
+                <pre><code id="${codeId}">${escapeHtml(code.trim())}</code></pre>
             </div>
-        `;
+        `);
+        return placeholder;
     });
 
+    // Escape basic HTML outside code blocks
+    processed = escapeHtml(processed);
+
+    // Headers
+    processed = processed.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    processed = processed.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    processed = processed.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+    // Bold & Italic
+    processed = processed.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    processed = processed.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
     // Inline code
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    processed = processed.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-    // Bold text
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // Process lists and paragraphs line by line
+    const lines = processed.split('\n');
+    const result = [];
+    let inUl = false;
+    let inOl = false;
 
-    // Italic text
-    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
 
-    // Bullet list items
-    html = html.replace(/^\s*-\s+(.+)$/gm, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+        const ulMatch = trimmed.match(/^[-*•]\s+(.+)$/);
+        const olMatch = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
 
-    // Newlines to line breaks (outside code blocks)
-    html = html.replace(/\n/g, '<br>');
+        if (ulMatch) {
+            if (inOl) { result.push('</ol>'); inOl = false; }
+            if (!inUl) { result.push('<ul>'); inUl = true; }
+            result.push(`<li>${ulMatch[1]}</li>`);
+        } else if (olMatch) {
+            if (inUl) { result.push('</ul>'); inUl = false; }
+            if (!inOl) { result.push('<ol>'); inOl = true; }
+            result.push(`<li>${olMatch[2]}</li>`);
+        } else {
+            if (inUl) { result.push('</ul>'); inUl = false; }
+            if (inOl) { result.push('</ol>'); inOl = false; }
 
-    return html;
+            if (trimmed.length > 0) {
+                if (trimmed.startsWith('<h') || trimmed.startsWith('__CODE_BLOCK_')) {
+                    result.push(trimmed);
+                } else {
+                    result.push(`<p>${trimmed}</p>`);
+                }
+            }
+        }
+    }
+
+    if (inUl) result.push('</ul>');
+    if (inOl) result.push('</ol>');
+
+    let finalHtml = result.join('');
+
+    // Restore code blocks
+    for (let i = 0; i < codeBlocks.length; i++) {
+        finalHtml = finalHtml.replace(`__CODE_BLOCK_${i}__`, codeBlocks[i]);
+    }
+
+    return finalHtml;
 }
 
 function escapeHtml(str) {
