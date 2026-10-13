@@ -883,7 +883,8 @@ function getPersonaInstruction() {
         "3. الذاكرة وسياق المحادثة: تذكر دائماً كل ما قيل ودار في المحادثة الحالية بدقة تامة. إذا سألك المستخدم عما دار بينكم أو سألك 'كنا بنتكلم في إيه؟'، لخص له كل الموضوعات والطلبات السابقة في هذا الشات فوراً وبشكل ذكي ومترابط ومفصل.\n" +
         "4. اللهجة والأسلوب: تحدث باللهجة المصرية الذكية والودودة بطبيعية تامة (مثل: يا باشا، يا غالي، تسلم، عينيا، كله تمام)، بدون مبالغة أو افتعال.\n" +
         "5. الأكواد والبرمجة: قدم كود نظيف واحترافي مباشرة مع شرح سطري موجز جداً.\n" +
-        "6. لا تتحدث بالإنجليزية إلا إذا طُلب منك صراحة الترجمة للإنجليزية."
+        "6. لا تتحدث بالإنجليزية إلا إذا طُلب منك صراحة الترجمة للإنجليزية.\n" +
+        "7. التوضيح البصري المنسق (صور توضيحية ذكية مثل شات جي بي تي): إذا سأل المستخدم عن مكان، معلم سياحي، مدينة، سيارة، وصفة أكل، حيوان، اختراع، شخصية، أو أي موضوع يستدعي التوضيح البصري (أو طلب صور صراحة)، قم بتضمين صورة واحدة توضيحية عالية الجودة في منتصف الرد بشكل منظم ومريح للعين باستخدام صيغة المارك داون: ![وصف مختصر للصورة بالعربي](https://image.pollinations.ai/prompt/English_Visual_Query_Here?width=800&height=450&nologo=true) بحيث يخدم الشرح ويزيد من إبهار الإجابة."
     );
 }
 
@@ -1534,7 +1535,24 @@ function formatMarkdown(text) {
         return placeholder;
     });
 
-    // Escape basic HTML outside code blocks
+    // Extract embedded images before HTML escaping (ChatGPT & Perplexity style)
+    const embeddedImages = [];
+    processed = processed.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s\)]+)\)/g, (match, alt, url) => {
+        const placeholder = `__EMBEDDED_IMG_${embeddedImages.length}__`;
+        const cleanAlt = alt ? alt.trim() : 'صورة توضيحية';
+        embeddedImages.push(`
+            <div class="embedded-chat-image">
+                <img src="${url}" alt="${cleanAlt}" loading="lazy" onclick="openLightbox('${url}')" onerror="this.parentElement.style.display='none'">
+                <div class="embedded-image-caption">
+                    <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                    <span>${cleanAlt}</span>
+                </div>
+            </div>
+        `);
+        return placeholder;
+    });
+
+    // Escape basic HTML outside code blocks and image placeholders
     processed = escapeHtml(processed);
 
     // Headers
@@ -1575,7 +1593,7 @@ function formatMarkdown(text) {
             if (inOl) { result.push('</ol>'); inOl = false; }
 
             if (trimmed.length > 0) {
-                if (trimmed.startsWith('<h') || trimmed.startsWith('__CODE_BLOCK_')) {
+                if (trimmed.startsWith('<h') || trimmed.startsWith('__CODE_BLOCK_') || trimmed.startsWith('__EMBEDDED_IMG_')) {
                     result.push(trimmed);
                 } else {
                     result.push(`<p>${trimmed}</p>`);
@@ -1594,8 +1612,14 @@ function formatMarkdown(text) {
         finalHtml = finalHtml.replace(`__CODE_BLOCK_${i}__`, codeBlocks[i]);
     }
 
+    // Restore embedded images
+    for (let i = 0; i < embeddedImages.length; i++) {
+        finalHtml = finalHtml.replace(`__EMBEDDED_IMG_${i}__`, embeddedImages[i]);
+    }
+
     return finalHtml;
 }
+
 
 function escapeHtml(str) {
     return str
