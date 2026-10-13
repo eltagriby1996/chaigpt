@@ -503,23 +503,72 @@ function loadSessions() {
         appState.ttsEnabled = false;
     }
 
-    const savedActiveId = localStorage.getItem('movita_ai_current_chat_id');
-    if (savedActiveId && appState.chats.some(c => c.id === savedActiveId)) {
-        appState.currentChatId = savedActiveId;
-    } else if (appState.chats.length > 0) {
-        appState.currentChatId = appState.chats[0].id;
+    // User requested: Always start on a fresh new chat on app launch
+    const existingEmpty = appState.chats.find(c => !c.messages || c.messages.length === 0);
+    if (existingEmpty) {
+        appState.currentChatId = existingEmpty.id;
     } else {
-        createNewChat();
-        return;
+        const newId = 'chat_' + Date.now();
+        const newChat = {
+            id: newId,
+            title: 'محادثة جديدة',
+            createdAt: new Date().toISOString(),
+            messages: []
+        };
+        appState.chats.unshift(newChat);
+        appState.currentChatId = newId;
     }
+    saveSessions();
     renderSidebar();
     renderCurrentChat();
 }
 
 function saveSessions() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appState.chats));
-    if (appState.currentChatId) {
-        localStorage.setItem('movita_ai_current_chat_id', appState.currentChatId);
+    try {
+        // Safe serializer to ensure localStorage quota (5MB) is never exceeded
+        const prepareSafeData = (chats, dropImagesFromOld = false, dropAllImages = false) => {
+            return JSON.stringify(chats.map(chat => ({
+                id: chat.id,
+                title: chat.title,
+                createdAt: chat.createdAt,
+                messages: (chat.messages || []).map(m => {
+                    let img = m.image;
+                    if (dropAllImages) {
+                        img = null;
+                    } else if (dropImagesFromOld && chat.id !== appState.currentChatId) {
+                        img = null;
+                    }
+                    return {
+                        id: m.id,
+                        role: m.role,
+                        text: m.text,
+                        rawPrompt: m.rawPrompt,
+                        image: img,
+                        isArt: m.isArt,
+                        artUrl: m.artUrl,
+                        timestamp: m.timestamp
+                    };
+                })
+            })));
+        };
+
+        try {
+            localStorage.setItem(STORAGE_KEY, prepareSafeData(appState.chats, false, false));
+        } catch (e1) {
+            console.warn("Storage quota warning, dropping heavy images from older chats...", e1);
+            try {
+                localStorage.setItem(STORAGE_KEY, prepareSafeData(appState.chats, true, false));
+            } catch (e2) {
+                console.warn("Storage quota tight, saving text-only history...", e2);
+                localStorage.setItem(STORAGE_KEY, prepareSafeData(appState.chats, true, true));
+            }
+        }
+
+        if (appState.currentChatId) {
+            localStorage.setItem('movita_ai_current_chat_id', appState.currentChatId);
+        }
+    } catch (err) {
+        console.error("Critical error saving sessions to localStorage:", err);
     }
 }
 
@@ -831,9 +880,10 @@ function getPersonaInstruction() {
         "القواعد الأساسية الصارمة:\n" +
         "1. المباشرة والتركيز (بدون رغي ولا لف ودوران): ادخل في صلب الإجابة مباشرة بدون مقدمات طويلة ولا حشو ولا جمل إنشائية مكررة. جاوب بذكاء وإيجاز شافي ووافي.\n" +
         "2. التنسيق المرتب المريح للعين: نسق إجابتك دائماً بعناوين فرعية واضحة (###) ونقاط محددة (- أو 1.) وفقرات قصيرة. ممنوع سرد الكلام ككتلة واحدة غير مقروءة.\n" +
-        "3. اللهجة والأسلوب: تحدث باللهجة المصرية الذكية والودودة بطبيعية تامة (مثل: يا باشا، يا غالي، تسلم، عينيا، كله تمام)، بدون مبالغة أو افتعال.\n" +
-        "4. الأكواد والبرمجة: قدم كود نظيف واحترافي مباشرة مع شرح سطري موجز جداً.\n" +
-        "5. لا تتحدث بالإنجليزية إلا إذا طُلب منك صراحة الترجمة للإنجليزية."
+        "3. الذاكرة وسياق المحادثة: تذكر دائماً كل ما قيل ودار في المحادثة الحالية بدقة تامة. إذا سألك المستخدم عما دار بينكم أو سألك 'كنا بنتكلم في إيه؟'، لخص له كل الموضوعات والطلبات السابقة في هذا الشات فوراً وبشكل ذكي ومترابط ومفصل.\n" +
+        "4. اللهجة والأسلوب: تحدث باللهجة المصرية الذكية والودودة بطبيعية تامة (مثل: يا باشا، يا غالي، تسلم، عينيا، كله تمام)، بدون مبالغة أو افتعال.\n" +
+        "5. الأكواد والبرمجة: قدم كود نظيف واحترافي مباشرة مع شرح سطري موجز جداً.\n" +
+        "6. لا تتحدث بالإنجليزية إلا إذا طُلب منك صراحة الترجمة للإنجليزية."
     );
 }
 
@@ -841,25 +891,43 @@ async function sendPromptToGemini(userText, mediaObj = null) {
     const chat = getCurrentChat();
     if (!chat) return "حدث خطأ في تحميل المحادثة.";
 
-    // Build multi-turn contents array from past messages
+    // 1. Build multi-turn contents from previous messages (excluding the last one which was just appended to chat.messages)
+    const rawPast = (chat.messages || []).slice(0, -1).slice(-20);
     const contents = [];
-    const recentMessages = chat.messages.slice(-12);
 
-    recentMessages.forEach(m => {
+    rawPast.forEach(m => {
+        const textContent = (m.rawPrompt || m.text || "").trim();
+        if (!textContent) return;
+
         if (m.role === 'user') {
             contents.push({
                 role: 'user',
-                parts: [{ text: m.rawPrompt || m.text || "مرحبا" }]
+                parts: [{ text: textContent }]
             });
         } else if (m.role === 'ai') {
             contents.push({
                 role: 'model',
-                parts: [{ text: m.text || "أهلاً بك" }]
+                parts: [{ text: textContent }]
             });
         }
     });
 
-    // Current turn parts
+    // Clean turn alternation: Ensure alternating user/model turns
+    const cleanContents = [];
+    for (const item of contents) {
+        if (cleanContents.length === 0) {
+            if (item.role === 'user') cleanContents.push(item);
+        } else {
+            const last = cleanContents[cleanContents.length - 1];
+            if (last.role === item.role) {
+                last.parts[0].text += "\n" + item.parts[0].text;
+            } else {
+                cleanContents.push(item);
+            }
+        }
+    }
+
+    // 2. Append Current User Turn
     const currentParts = [];
     if (mediaObj && mediaObj.base64) {
         currentParts.push({
@@ -872,13 +940,13 @@ async function sendPromptToGemini(userText, mediaObj = null) {
 
     const promptText = (userText || "أجب عن سؤالي بذكاء وبالمصري.").trim();
     const isExplicitEnglish = promptText.includes("ترجم للإنجليزي") || promptText.includes("write in english") || promptText.includes("translate to english");
-    const langDirective = isExplicitEnglish ? "" : "\n\n(توجيه: جاوب بالمصري الذكي، باختصار وتركيز وبدون رغي زائد، ورتب إجابتك في نقاط واضحة).";
+    const langDirective = isExplicitEnglish ? "" : "\n\n(توجيه: جاوب بالمصري الذكي، باختصار وتركيز وبدون رغي زائد، ورتب إجابتك في نقاط واضحة، وتذكر كل سياق وموضوعات هذه المحادثة بدقة).";
 
     currentParts.push({
         text: promptText + langDirective
     });
 
-    contents.push({
+    cleanContents.push({
         role: 'user',
         parts: currentParts
     });
@@ -887,7 +955,7 @@ async function sendPromptToGemini(userText, mediaObj = null) {
         system_instruction: {
             parts: [{ text: getPersonaInstruction() }]
         },
-        contents: contents
+        contents: cleanContents
     };
 
     // 1. Primary Engine: High-Speed Multi-Key Gemini Failover (12s timeout)
@@ -923,11 +991,16 @@ async function sendPromptToGemini(userText, mediaObj = null) {
         }
     }
 
-    // 2. High-Speed Secondary Engine (Zero-Failure Fallback)
+    // 2. High-Speed Secondary Engine (Zero-Failure Fallback with Context)
     try {
         console.info("Switching to ChaiGPT High-Speed Fallback Engine...");
         const sysPrompt = encodeURIComponent(getPersonaInstruction());
-        const userPrompt = encodeURIComponent(promptText);
+        let fallbackQuery = promptText;
+        if (cleanContents.length > 1) {
+            const contextText = cleanContents.slice(0, -1).map(c => `${c.role === 'user' ? 'المستخدم' : 'شاي GPT'}: ${c.parts.map(p => p.text || '').join(' ')}`).join('\n');
+            fallbackQuery = `[سياق المحادثة السابقة:\n${contextText}\n]\n\nطلب المستخدم الحالي: ${promptText}`;
+        }
+        const userPrompt = encodeURIComponent(fallbackQuery);
         const fallbackUrl = `https://text.pollinations.ai/${userPrompt}?system=${sysPrompt}&model=openai`;
         
         const fController = new AbortController();
