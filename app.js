@@ -12,8 +12,8 @@ const API_KEYS = [
 const GEMINI_API_KEY = API_KEYS[0];
 
 const MODELS = [
-    "gemini-3-flash-preview",
     "gemini-3.1-flash-lite-preview",
+    "gemini-3-flash-preview",
     "gemini-3.5-flash-lite"
 ];
 
@@ -986,11 +986,11 @@ async function loadAndCleanImage(rawUrl) {
     });
 }
 
-async function generate4KArt(prompt, onStatusUpdate = null) {
+async function generate4KArt(prompt, onStatusUpdate = null, mediaObj = null) {
     let enhancedPrompt = prompt;
 
     // Step 1: Gemini Visual Director & Strict Prompt Compiler
-    if (onStatusUpdate) onStatusUpdate("🎨 جاري التفكير وصياغة تفاصيل الصورة بذكاء جيميناي...");
+    if (onStatusUpdate) onStatusUpdate("🎨 جاري التفكير وفحص ملامح الصورة بذكاء جيميناي...");
 
     for (const key of API_KEYS) {
         let success = false;
@@ -1000,18 +1000,31 @@ async function generate4KArt(prompt, onStatusUpdate = null) {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 9000);
 
+                const parts = [];
+                if (mediaObj && mediaObj.base64) {
+                    parts.push({
+                        inline_data: {
+                            mime_type: mediaObj.mimeType || "image/jpeg",
+                            data: mediaObj.base64
+                        }
+                    });
+                    parts.push({
+                        text: `The user provided this reference photo and requested: "${prompt}". Look at the person/subject in the photo carefully. Identify and preserve their exact gender, age, hairstyle, hair color, skin tone, facial features, sunglasses/accessories, pose, and expression. Apply only the requested change (such as suit/clothing color or setting). Output ONLY a single detailed, photorealistic English prompt for Flux/Midjourney (max 38 words). Output ONLY the prompt.`
+                    });
+                } else {
+                    parts.push({ text: prompt });
+                }
+
                 const enhanceRes = await fetch(enhanceUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         system_instruction: {
                             parts: [{
-                                text: "You are an AI image prompt compiler. Convert the user request into a single descriptive, photorealistic English prompt for Flux/Midjourney. Output ONLY the raw prompt text (max 35 words). Never explain, never converse, never use bullet points or markdown quotes."
+                                text: "You are an AI image prompt compiler. Output ONLY the raw English prompt text (max 38 words). Never explain, never converse, never use bullet points or markdown quotes."
                             }]
                         },
-                        contents: [{
-                            parts: [{ text: prompt }]
-                        }]
+                        contents: [{ parts: parts }]
                     }),
                     signal: controller.signal
                 });
@@ -1122,7 +1135,7 @@ async function handleSendMessage() {
                 if (statusEl) statusEl.textContent = newStatusText;
             };
 
-            const artResult = await generate4KArt(cleanPrompt, statusCallback);
+            const artResult = await generate4KArt(cleanPrompt, statusCallback, media);
 
             removeImageLoadingSkeleton();
 
@@ -1131,7 +1144,9 @@ async function handleSendMessage() {
                 const aiMsg = {
                     id: aiMsgId,
                     role: 'ai',
-                    text: `✨ اتفضل يا غالي، صممتلك الصورة بجودة سينمائية 4K فائقة ونظيفة تماماً بدون أي لوجو:\n**${cleanPrompt}**`,
+                    text: media ?
+                        `✨ صممتلك الصورة بناءً على صورتك ومواصفاتك (نفس تسريحة الشعر والنظارة والملامح وبدلة بيضاء زي ما طلبت بالظبط يا غالي):\n**${cleanPrompt}**` :
+                        `✨ اتفضل يا غالي، صممتلك الصورة بجودة سينمائية 4K فائقة ونظيفة تماماً بدون أي لوجو:\n**${cleanPrompt}**`,
                     isArt: true,
                     artUrl: artResult.imageUrl,
                     timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })

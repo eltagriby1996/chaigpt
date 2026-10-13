@@ -1185,8 +1185,10 @@ body {
 }
 
 .message-wrapper.user .message-avatar {
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-    color: #fff;
+    background: #252a38;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .message-body {
@@ -1287,11 +1289,12 @@ body {
 }
 
 .message-wrapper.user .message-bubble {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.88), rgba(37, 99, 235, 0.96));
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: #232734;
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-top-left-radius: 4px;
-    color: #fff;
-    box-shadow: 0 8px 25px rgba(37, 99, 235, 0.35);
+    color: #f8fafc;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
 }
 
 /* AI Streaming Kinetic Typewriter Cursor */
@@ -1314,11 +1317,13 @@ body {
 
 /* Image Attachment in Bubble */
 .message-image-attachment {
-    max-width: 320px;
-    border-radius: var(--radius-md);
+    max-width: 290px;
+    border-radius: 14px;
     overflow: hidden;
-    margin-bottom: 10px;
-    border: 1px solid var(--border-glass);
+    margin-bottom: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.2);
 }
 
 .message-image-attachment img {
@@ -2571,15 +2576,15 @@ select {
     }
 
     .message-wrapper.user .message-bubble {
-        background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
-        border: 1px solid rgba(255, 255, 255, 0.22) !important;
+        background: #232734 !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
         border-radius: 18px 18px 4px 18px !important;
-        padding: 11px 16px !important;
-        color: #ffffff !important;
+        padding: 10px 15px !important;
+        color: #f8fafc !important;
         font-size: 14.5px !important;
         line-height: 1.55 !important;
         font-weight: 500 !important;
-        box-shadow: 0 4px 18px rgba(37, 99, 235, 0.35) !important;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35) !important;
         word-break: break-word !important;
         overflow-wrap: break-word !important;
         width: auto !important;
@@ -2587,7 +2592,9 @@ select {
     }
 
     .message-wrapper.user .message-avatar {
-        background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
+        background: #252a38 !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        color: #cbd5e1 !important;
     }
 
     .message-actions {
