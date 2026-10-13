@@ -476,7 +476,14 @@ function loadSessions() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
         try {
-            appState.chats = JSON.parse(saved);
+            const rawChats = JSON.parse(saved);
+            if (Array.isArray(rawChats)) {
+                const nonEmpty = rawChats.filter(c => c && c.messages && c.messages.length > 0);
+                const firstEmpty = rawChats.find(c => c && (!c.messages || c.messages.length === 0));
+                appState.chats = firstEmpty ? [firstEmpty, ...nonEmpty] : nonEmpty;
+            } else {
+                appState.chats = [];
+            }
         } catch (e) {
             appState.chats = [];
         }
@@ -515,6 +522,30 @@ function saveSessions() {
 }
 
 function createNewChat() {
+    // 1. If the current chat is already empty, reuse it, close sidebar, and focus
+    const currentChat = getCurrentChat();
+    if (currentChat && (!currentChat.messages || currentChat.messages.length === 0)) {
+        closeSidebar();
+        renderCurrentChat();
+        sfx.playClick();
+        setTimeout(() => document.getElementById('user-input')?.focus(), 120);
+        return;
+    }
+
+    // 2. If any chat in history is already empty, switch to it instead of creating duplicates
+    const existingEmpty = appState.chats.find(c => !c.messages || c.messages.length === 0);
+    if (existingEmpty) {
+        appState.currentChatId = existingEmpty.id;
+        saveSessions();
+        renderSidebar();
+        renderCurrentChat();
+        closeSidebar();
+        sfx.playClick();
+        setTimeout(() => document.getElementById('user-input')?.focus(), 120);
+        return;
+    }
+
+    // 3. Create a fresh new chat session
     const newId = 'chat_' + Date.now();
     const newChat = {
         id: newId,
@@ -527,7 +558,9 @@ function createNewChat() {
     saveSessions();
     renderSidebar();
     renderCurrentChat();
+    closeSidebar();
     sfx.playClick();
+    setTimeout(() => document.getElementById('user-input')?.focus(), 120);
 }
 
 function getCurrentChat() {
