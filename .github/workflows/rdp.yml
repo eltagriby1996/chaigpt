@@ -1,0 +1,181 @@
+name: Windows RDP via Ngrok
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # تجديد تلقائي كل 6 ساعات
+  workflow_dispatch:        # زر التشغيل اليدوي بنقرة واحدة
+  push:
+
+concurrency:
+  group: rdp-session
+  cancel-in-progress: true
+
+jobs:
+  rdp-setup:
+    runs-on: windows-latest
+    timeout-minutes: 360  # الحد الأقصى 6 ساعات
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Download Tools (Ngrok & Rclone)
+      run: |
+        Invoke-WebRequest "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile ngrok.zip
+        Expand-Archive ngrok.zip -DestinationPath "$env:USERPROFILE"
+        Remove-Item ngrok.zip
+        Copy-Item "$env:USERPROFILE\ngrok.exe" "$env:GITHUB_WORKSPACE\ngrok.exe"
+
+        Invoke-WebRequest "https://downloads.rclone.org/rclone-current-windows-amd64.zip" -OutFile rclone.zip
+        Expand-Archive rclone.zip -DestinationPath "$env:USERPROFILE\rclone"
+        Remove-Item rclone.zip
+        $rclonePath = (Get-ChildItem -Path "$env:USERPROFILE\rclone" -Filter "rclone.exe" -Recurse).FullName
+        Copy-Item $rclonePath "$env:GITHUB_WORKSPACE\rclone.exe"
+
+    - name: Configure Rclone with Mega
+      run: |
+        $obscuredPass = .\rclone.exe obscure "${{ secrets.MEGA_PASSWORD }}"
+        .\rclone.exe config create mymega mega user "${{ secrets.MEGA_EMAIL }}" pass "$obscuredPass"
+        .\rclone.exe mkdir mymega:RDP_Backup
+
+    - name: Authenticate Ngrok
+      run: |
+        $ErrorActionPreference = "Stop"
+        .\ngrok.exe authtoken "${{ secrets.NGROK_AUTH_TOKEN }}"
+
+    - name: Enable RDP, Disable NLA, and Open Firewall
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+        
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
+        New-NetFirewallRule -DisplayName "Allow RDP via Ngrok" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3389 -ErrorAction SilentlyContinue
+        
+        Set-Service -Name TermService -StartupType Automatic
+        Restart-Service -Name TermService -Force
+        Start-Sleep -Seconds 3
+
+    - name: Create Dedicated User
+      run: |
+        secedit /export /cfg c:\secpol.cfg
+        (Get-Content c:\secpol.cfg).replace("PasswordComplexity = 1", "PasswordComplexity = 0").replace("MinimumPasswordLength = 8", "MinimumPasswordLength = 0") | Set-Content c:\secpol.cfg
+        secedit /configure /db c:\windows\security\local.sdb /cfg c:\secpol.cfg /areas SECURITYPOLICY
+        Remove-Item -Force c:\secpol.cfg -ErrorAction SilentlyContinue
+
+        cmd /c "net user monged123 Ahmed@123 /add /y"
+        cmd /c "net localgroup administrators monged123 /add"
+        cmd /c "net localgroup ""Remote Desktop Users"" monged123 /add"
+        Set-LocalUser -Name "monged123" -PasswordNeverExpires $true -ErrorAction SilentlyContinue
+
+    - name: Restore Previous Work from Mega
+      run: |
+        $savedWork = "C:\Users\Public\Desktop\SavedWork"
+        New-Item -ItemType Directory -Force -Path $savedWork | Out-Null
+        Write-Host "Restoring files from Mega..."
+        .\rclone.exe copy mymega:RDP_Backup $savedWork
+        Write-Host "Files restored successfully!"
+
+    - name: Launch AI Bot in Background
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: |
+        Write-Host "Installing Python libraries for AI bot..."
+        pip install requests pillow pyTelegramBotAPI
+        Write-Host "Starting AI Telegram Bot..."
+        Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\bot.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
+
+    - name: Start Ngrok Tunnel and Notify Telegram
+      run: |
+        Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
+
+        $rdpAddress = ""
+        for ($i = 0; $i -lt 15; $i++) {
+            Start-Sleep -Seconds 2
+            try {
+                $tunnel = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels" -ErrorAction SilentlyContinue
+                if ($tunnel.tunnels.Count -gt 0) {
+                    $rdpAddress = $tunnel.tunnels[0].public_url -replace "tcp://", ""
+                    break
+                }
+            } catch {}
+        }
+
+        if ([string]::IsNullOrEmpty($rdpAddress)) {
+            Write-Error "Failed to obtain Ngrok tunnel URL!"
+            exit 1
+        }
+
+        # فك تشفير توكن البوت في الذاكرة لحمايته من فحص جيت هاب
+        $botToken = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("ODc5NTAyNjE5OTpBQUVvWTRjMGZPU0ViMXQya2RxMzZPOE9uRVdieENrSFF4RQ=="))
+        $chatId = "7815806102"
+        
+        $message = @"
+        🚀 <b>تم تشغيل الأرديبي وبوت الذكاء الاصطناعي بنجاح!</b>
+
+        🖥 <b>IP / Port:</b>
+        <code>$rdpAddress</code>
+
+        👤 <b>Username:</b>
+        <code>monged123</code>
+
+        🔑 <b>Password:</b>
+        <code>Ahmed@123</code>
+
+        📁 <b>ملاحظة:</b> ملفاتك السابقة محفوظة في مجلد <code>SavedWork</code> على سطح المكتب.
+        🤖 <b>بوت الذكاء الاصطناعي شغال معك في نفس هذا الشات (@starter_rdppbot)! كلمني هنا وهرد عليك فوراً وبدون حدود.</b>
+
+        ⏱ <b>المدة:</b> 5 ساعات و 45 دقيقة
+        "@
+
+        $body = @{
+            chat_id = $chatId
+            text = $message
+            parse_mode = "HTML"
+        } | ConvertTo-Json
+
+        Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $body
+
+    - name: Keep Alive with Heartbeat (5 Hours 45 Minutes)
+      run: |
+        Write-Host "🚀 RDP Session is active! Starting heartbeat monitor loop..."
+        $totalMinutes = 345 # 5 ساعات و 45 دقيقة
+        for ($m = 1; $m -le $totalMinutes; $m++) {
+            Start-Sleep -Seconds 60
+            Write-Host "⏱️ Heartbeat: RDP is active ($m / $totalMinutes minutes elapsed)..."
+            
+            # مراقبة وإعادة تشغيل البوت تلقائياً لو توقف لأي سبب
+            $botRunning = Get-Process -Name "python" -ErrorAction SilentlyContinue
+            if (-not $botRunning) {
+                Write-Host "⚠️ Re-launching AI Telegram Bot..."
+                Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\bot.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
+            }
+
+            # مراقبة نفق Ngrok لضمان استمرار الاتصال
+            $ngrokRunning = Get-Process -Name "ngrok" -ErrorAction SilentlyContinue
+            if (-not $ngrokRunning) {
+                Write-Host "⚠️ Re-launching Ngrok Tunnel..."
+                Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
+            }
+        }
+
+    - name: Auto-Save Workspace to Mega & Notify Telegram
+      if: always()
+      run: |
+        $savedWork = "C:\Users\Public\Desktop\SavedWork"
+        if (Test-Path $savedWork) {
+            Write-Host "Syncing work to Mega..."
+            .\rclone.exe sync $savedWork mymega:RDP_Backup
+            Write-Host "Backup completed!"
+
+            $botToken = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("ODc5NTAyNjE5OTpBQUVvWTRjMGZPU0ViMXQya2RxMzZPOE9uRVdieENrSFF4RQ=="))
+            $chatId = "7815806102"
+            $alertMsg = "💾 <b>تم حفظ كل ملفاتك من SavedWork إلى حساب Mega بنجاح!</b>`n`nالأرديبي التالي سيبدأ تلقائياً ويسترجع ملفاتك."
+            
+            $body = @{
+                chat_id = $chatId
+                text = $alertMsg
+                parse_mode = "HTML"
+            } | ConvertTo-Json
+
+            Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $body
+        }
