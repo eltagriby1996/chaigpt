@@ -2471,10 +2471,11 @@ select {
     }
 
     .brewing-text {
-        font-size: 12px !important;
-        line-height: 1.35 !important;
+        font-size: 13px !important;
+        line-height: 1.45 !important;
         white-space: normal !important;
         word-break: break-word !important;
+        overflow-wrap: break-word !important;
     }
 
     .brewing-progress-bar {

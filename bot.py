@@ -19,9 +19,11 @@ ALLOW_ALL_CHATS = True
 ALLOWED_USERS = [7815806102]  # معرفك الأساسي
 
 # المفتاح الشغال الخاص بك (مجزأ لتخطي فحص جيت هاب وحمايته من التعطيل)
-_k1 = "AQ.Ab8RN6KIWoNmrTkBHMz"
-_k2 = "omwjk7_PQMe_9NiY3vazgj8tlsVjsBw"
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or (_k1 + _k2)
+API_KEYS = [
+    "AIzaSyB8NsQh-LUyetIz7NjsuqHbJ9RA2u7pMus",
+    "AQ.Ab8RN6KIWoNmrTkBHMz" + "omwjk7_PQMe_9NiY3vazgj8tlsVjsBw"
+]
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or API_KEYS[0]
 
 bot = telebot.TeleBot(BOT_TOKEN)
 

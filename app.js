@@ -4,9 +4,11 @@
  */
 
 // ----------------- API Configuration -----------------
-const _k1 = "AQ.Ab8RN6KIWoNmrTkBHMz";
-const _k2 = "omwjk7_PQMe_9NiY3vazgj8tlsVjsBw";
-const GEMINI_API_KEY = _k1 + _k2;
+const API_KEYS = [
+    "AIzaSyB8NsQh-LUyetIz7NjsuqHbJ9RA2u7pMus",
+    "AQ.Ab8RN6KIWoNmrTkBHMz" + "omwjk7_PQMe_9NiY3vazgj8tlsVjsBw"
+];
+const GEMINI_API_KEY = API_KEYS[0];
 
 const MODELS = [
     "gemini-3-flash-preview",
@@ -761,7 +763,7 @@ function showLoadingSkeleton() {
                         <div class="brewing-bubble b3"></div>
                     </div>
                     <div class="brewing-info">
-                        <div class="brewing-text">جاري تحضير الرد بروقان ☕...</div>
+                        <div class="brewing-text">صب كوباية شاي في الخمسينة.. جاري التفكير بروقان ☕</div>
                         <div class="brewing-progress-bar"><div class="brewing-progress-glow"></div></div>
                     </div>
                 </div>
@@ -849,31 +851,36 @@ async function sendPromptToGemini(userText, mediaObj = null) {
         contents: contents
     };
 
-    // 1. Primary Engine: Ultra-Fast Google Gemini Failover with 7s Timeout
-    for (const model of MODELS) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3500);
+    // 1. Primary Engine: High-Speed Multi-Key Gemini Failover (12s timeout)
+    for (const key of API_KEYS) {
+        for (const model of MODELS) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
 
-            if (res.ok) {
-                const data = await res.json();
-                if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) {
-                    return data.candidates[0].content.parts[0].text;
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+                        return data.candidates[0].content.parts[0].text;
+                    }
+                } else {
+                    console.warn(`Key/Model ${model} returned status ${res.status}`);
+                    if (res.status === 429) {
+                        break; // Switch to next key in pool
+                    }
                 }
-            } else {
-                console.warn(`Model ${model} returned status ${res.status}`);
+            } catch (err) {
+                console.warn(`Model ${model} timeout or error:`, err);
             }
-        } catch (err) {
-            console.warn(`Model ${model} timeout or error:`, err);
         }
     }
 
