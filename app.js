@@ -798,9 +798,7 @@ async function sendPromptToGemini(userText, mediaObj = null) {
 
     const promptText = (userText || "أجب عن سؤالي بذكاء وبالمصري.").trim();
     const isExplicitEnglish = promptText.includes("ترجم للإنجليزي") || promptText.includes("write in english") || promptText.includes("translate to english");
-    const langDirective = isExplicitEnglish ? "" : "
-
-(توجيه إلزامي: أجب باللغة العربية حصراً وباللهجة المصرية الحية الذكية مثل ChatGPT المصري تماماً).";
+    const langDirective = isExplicitEnglish ? "" : "\n\n(توجيه إلزامي: أجب باللغة العربية حصراً وباللهجة المصرية الحية الذكية مثل ChatGPT المصري تماماً).";
 
     currentParts.push({
         text: promptText + langDirective
@@ -920,7 +918,11 @@ async function handleSendMessage() {
 
     if (!text && !media) return;
 
-    const chat = getCurrentChat();
+    let chat = getCurrentChat();
+    if (!chat) {
+        createNewChat();
+        chat = getCurrentChat();
+    }
     if (!chat) return;
 
     // Reset input and attachments
@@ -1505,15 +1507,20 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sidebar-overlay').onclick = closeSidebar;
 
     // Send Button & Enter Key
-    document.getElementById('send-btn').onclick = handleSendMessage;
+    const sendBtn = document.getElementById('send-btn');
+    if (sendBtn) {
+        sendBtn.onclick = handleSendMessage;
+        sendBtn.addEventListener('click', handleSendMessage);
+    }
     const inputArea = document.getElementById('user-input');
-
-    inputArea.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage();
-        }
-    });
+    if (inputArea) {
+        inputArea.addEventListener('keydown', (e) => {
+            if ((e.key === 'Enter' || e.keyCode === 13) && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+            }
+        });
+    }
 
     // Auto-grow textarea
     inputArea.addEventListener('input', function() {
