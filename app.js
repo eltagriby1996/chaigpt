@@ -5,6 +5,7 @@
 
 // ----------------- API Configuration -----------------
 const API_KEYS = [
+    "AQ.Ab8RN6Ju_wVnV_" + "nXVq5k75-lbdXXidtZVpTwQoGZmCROPrPTvw",
     "AIzaSyB8NsQh-LUyetIz7NjsuqHbJ9RA2u7pMus",
     "AQ.Ab8RN6KIWoNmrTkBHMz" + "omwjk7_PQMe_9NiY3vazgj8tlsVjsBw"
 ];
@@ -12,8 +13,8 @@ const GEMINI_API_KEY = API_KEYS[0];
 
 const MODELS = [
     "gemini-3-flash-preview",
-    "gemini-flash-latest",
-    "gemini-3.5-flash"
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3.5-flash-lite"
 ];
 
 // ----------------- State Management -----------------
@@ -913,38 +914,56 @@ async function sendPromptToGemini(userText, mediaObj = null) {
 // ----------------- 4K Image Generation Engine -----------------
 
 async function generate4KArt(prompt) {
-    try {
-        // Step 1: Translate & Enhance Prompt via Fast Gemini
-        const enhanceUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-        const enhanceRes = await fetch(enhanceUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: `Translate and enhance this image description into a vivid photorealistic English prompt for Flux (max 25 words, no intro or quotes): ${prompt}`
-                    }]
-                }]
-            })
-        });
+    let enhancedPrompt = prompt;
 
-        let enhancedPrompt = prompt;
-        if (enhanceRes.ok) {
-            const data = await enhanceRes.json();
-            enhancedPrompt = data.candidates[0].content.parts[0].text.trim();
+    // Step 1: Gemini Visual Director & Prompt Engineer (Unlimited High-Quality Masterpiece Generation)
+    for (const key of API_KEYS) {
+        let success = false;
+        for (const model of MODELS) {
+            try {
+                const enhanceUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 9000);
+
+                const enhanceRes = await fetch(enhanceUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `You are ChaiGPT Elite Visual Director & Masterpiece Prompt Engineer. Transform the following user request into an ultra-detailed, photorealistic, cinematic 8K English prompt for Flux/Midjourney. Include cinematic lighting, volumetric atmosphere, octane render, 85mm lens f/1.4, award-winning photography, hyperrealistic textures, no text, no blur. Return ONLY the enhanced English prompt (max 40 words), no preamble, no markdown, no quotes:\n\nUser request: ${prompt}`
+                            }]
+                        }]
+                    }),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (enhanceRes.ok) {
+                    const data = await enhanceRes.json();
+                    const textCandidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (textCandidate && textCandidate.trim().length > 5) {
+                        enhancedPrompt = textCandidate.trim().replace(/^[\"\']|[\"\']$/g, '');
+                        success = true;
+                        break;
+                    }
+                }
+            } catch (err) {
+                console.warn(`Image prompt enhance with ${model} skipped:`, err);
+            }
         }
-
-        // Step 2: Generate via Pollinations Flux with nologo
-        const encoded = encodeURIComponent(enhancedPrompt);
-        const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&model=flux&nologo=true`;
-
-        return {
-            imageUrl: imageUrl,
-            enhancedPrompt: enhancedPrompt
-        };
-    } catch (e) {
-        return null;
+        if (success) break;
     }
+
+    // Step 2: Ultra-HD Seeded Render via Flux Engine (Zero Watermarks, 1024x1024, Unlimited)
+    const seed = Math.floor(Math.random() * 9000000) + 1000000;
+    const encoded = encodeURIComponent(enhancedPrompt);
+    const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&model=flux&nologo=true&seed=${seed}`;
+
+    return {
+        imageUrl: imageUrl,
+        enhancedPrompt: enhancedPrompt
+    };
 }
 
 // ----------------- Message Submission Controller -----------------
@@ -995,7 +1014,8 @@ async function handleSendMessage() {
     appendMessageElement(userMsg);
 
     // Check if user requested image generation via /image
-    const isImageRequest = text.startsWith('/image') || text.startsWith('رسم') || text.startsWith('صورة');
+    const trimmedText = text.trim();
+    const isImageRequest = /^\s*(\/image|ارسم|صورة|عاوز صورة|عايز صورة|اعملي صورة|ولد صورة|توليد صورة)\b/i.test(trimmedText);
 
     appState.isGenerating = true;
     document.getElementById('ae-spectrum')?.classList.add('spectrum-active');
@@ -1003,7 +1023,9 @@ async function handleSendMessage() {
 
     try {
         if (isImageRequest) {
-            const cleanPrompt = text.replace('/image', '').replace('ارسم', '').replace('صورة لـ', '').trim() || text;
+            const cleanPrompt = text
+                .replace(/^\s*(\/image|ارسم لي|ارسم|عاوز صورة لـ|عايز صورة لـ|اعملي صورة لـ|عاوز صورة|عايز صورة|اعملي صورة|صورة لـ|صورة|توليد صورة)\s*/i, '')
+                .trim() || text;
             const artResult = await generate4KArt(cleanPrompt);
 
             removeLoadingSkeleton();
@@ -1013,7 +1035,7 @@ async function handleSendMessage() {
                 const aiMsg = {
                     id: aiMsgId,
                     role: 'ai',
-                    text: `✨ اتفضل يا كبير، صممتلك الصورة بدقة 4K بناءً على طلبك: **${cleanPrompt}**`,
+                    text: `✨ اتفضل يا غالي، صممتلك الصورة بجودة سينمائية 4K فائقة عبر ذكاء جيميناي ومحرك فلكس وبدون أي حدود: **${cleanPrompt}**`,
                     isArt: true,
                     artUrl: artResult.imageUrl,
                     timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })

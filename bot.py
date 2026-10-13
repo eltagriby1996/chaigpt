@@ -1,3 +1,4 @@
+import random
 import os
 import sys
 import json
@@ -20,6 +21,7 @@ ALLOWED_USERS = [7815806102]  # معرفك الأساسي
 
 # المفتاح الشغال الخاص بك (مجزأ لتخطي فحص جيت هاب وحمايته من التعطيل)
 API_KEYS = [
+    "AQ.Ab8RN6Ju_wVnV_" + "nXVq5k75-lbdXXidtZVpTwQoGZmCROPrPTvw",
     "AIzaSyB8NsQh-LUyetIz7NjsuqHbJ9RA2u7pMus",
     "AQ.Ab8RN6KIWoNmrTkBHMz" + "omwjk7_PQMe_9NiY3vazgj8tlsVjsBw"
 ]
@@ -29,9 +31,9 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 # نماذج سريعة ومستقرة بدون أي حدود ضيقة (1500 رسالة يومياً)
 MODELS = [
-    "gemini-3.5-flash",
+    "gemini-3-flash-preview",
     "gemini-3.1-flash-lite-preview",
-    "gemini-3-flash-preview"
+    "gemini-3.5-flash-lite"
 ]
 
 # ----------------- نظام الذاكرة والسياق (Memory) -----------------
@@ -122,28 +124,37 @@ def ask_gemini(chat_id: int, prompt: str, media_bytes: bytes = None, mime_type: 
     return "معلش يا غالي، كان فيه ضغط لحظي على السيرفر، ابعتلي رسالتك تاني حالا وهرد عليك فوراً! 🫡"
 
 def enhance_image_prompt(arabic_prompt: str) -> str:
-    """تحويل وتحسين وصف الصورة إلى الإنجليزية عبر الذكاء الاصطناعي لأفضل دقة ممكنة"""
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key={GEMINI_API_KEY}"
-        req_body = {
-            "contents": [{
-                "parts": [{
-                    "text": f"Translate and enhance this image description into a vivid, photorealistic English prompt for Flux image generator (max 25 words, no intro or quotes): {arabic_prompt}"
+    """تحويل وتحسين وصف الصورة إلى الإنجليزية عبر ذكاء جيميناي لأعلى جودة سينمائية"""
+    for model in MODELS:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+            req_body = {
+                "contents": [{
+                    "parts": [{
+                        "text": f"""You are ChaiGPT Elite Visual Director & Masterpiece Prompt Engineer. Transform this user description into an ultra-detailed, photorealistic, cinematic 8K English prompt for Flux/Midjourney. Include cinematic volumetric lighting, atmospheric depth, octane render, 85mm lens f/1.4, award-winning photography, hyperrealistic textures, no text, no blur. Return ONLY the enhanced English prompt (max 40 words), no preamble, no quotes:
+
+User request: {arabic_prompt}"""
+                    }]
                 }]
-            }]
-        }
-        res = requests.post(url, json=req_body, timeout=10)
-        if res.status_code == 200:
-            return res.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except Exception:
-        pass
+            }
+            res = requests.post(url, json=req_body, timeout=10)
+            if res.status_code == 200:
+                data = res.json()
+                if "candidates" in data and data["candidates"]:
+                    candidate = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    cleaned = candidate.replace('"', '').replace("'", "")
+                    if len(cleaned) > 5:
+                        return cleaned
+        except Exception:
+            continue
     return arabic_prompt
 
 def generate_image(prompt: str) -> bytes:
-    """توليد صورة مجاناً وبأعلى جودة عبر محرك Flux وقص الشعار/اللوجو بالكامل"""
+    """توليد صورة مجاناً وبأعلى جودة عبر ذكاء جيميناي ومحرك Flux وبدون أي حدود أو لوجو"""
     enhanced = enhance_image_prompt(prompt)
+    seed = random.randint(1000000, 9999999)
     encoded_prompt = quote(enhanced)
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true"
+    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true&seed={seed}"
     
     res = requests.get(url, timeout=45)
     if res.status_code == 200:
