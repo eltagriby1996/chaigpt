@@ -3034,3 +3034,275 @@ select {
 .prompt-card {
     display: none !important;
 }
+
+
+/* ==========================================================================
+   AI IMAGE GENERATOR SHIMMER CARD (ChatGPT & Gemini Style)
+   ========================================================================== */
+.image-generating-bubble {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 16px !important;
+    background: rgba(18, 22, 36, 0.92) !important;
+    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 25px rgba(139, 92, 246, 0.15) !important;
+    border-radius: 20px !important;
+    box-sizing: border-box !important;
+}
+
+.image-generator-loader {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+
+.img-loader-shimmer-box {
+    width: 100%;
+    height: 190px;
+    border-radius: 14px;
+    background: #0b0e18;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.img-loader-shimmer-art {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at center, rgba(139, 92, 246, 0.18), rgba(6, 182, 212, 0.08) 70%, transparent);
+}
+
+.img-loader-shimmer-glow {
+    position: absolute;
+    inset: -60%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+    transform: rotate(25deg);
+    animation: shimmerSweep 1.8s infinite linear;
+    pointer-events: none;
+}
+
+@keyframes shimmerSweep {
+    0% { transform: translateX(-150%) rotate(25deg); }
+    100% { transform: translateX(150%) rotate(25deg); }
+}
+
+.img-loader-center-icon {
+    position: relative;
+    z-index: 2;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(18, 24, 40, 0.88);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #c084fc;
+    box-shadow: 0 0 25px rgba(139, 92, 246, 0.5);
+    animation: iconPulse 2s infinite ease-in-out;
+}
+
+@keyframes iconPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(139, 92, 246, 0.35); }
+    50% { transform: scale(1.08); box-shadow: 0 0 35px rgba(139, 92, 246, 0.7); }
+}
+
+.img-loader-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.img-loader-status {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1.45;
+}
+
+.img-loader-prompt {
+    font-size: 13px;
+    color: #94a3b8;
+    line-height: 1.45;
+    white-space: normal;
+    word-break: break-word;
+    font-style: italic;
+}
+
+/* ==========================================================================
+   ENHANCED ART CARD & WATERMARK CLIPPER
+   ========================================================================== */
+.art-card {
+    position: relative;
+    margin: 10px 0 6px 0;
+    border-radius: 18px;
+    overflow: hidden;
+    background: #090c14;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.art-card img {
+    width: 100%;
+    height: auto;
+    max-height: 520px;
+    object-fit: cover;
+    display: block;
+    cursor: pointer;
+    transition: transform 0.35s ease;
+    border-radius: 16px;
+}
+
+.art-card:hover img {
+    transform: scale(1.015);
+}
+
+.art-card-actions {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    display: flex;
+    gap: 8px;
+    z-index: 5;
+}
+
+.art-btn {
+    background: rgba(15, 20, 32, 0.88);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    padding: 7px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    text-decoration: none;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s ease;
+}
+
+.art-btn:hover {
+    background: rgba(139, 92, 246, 0.95);
+    border-color: rgba(255, 255, 255, 0.35);
+    transform: translateY(-2px);
+}
+
+/* ==========================================================================
+   PREMIUM LIGHTBOX MODAL
+   ========================================================================== */
+.lightbox-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 2500;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.lightbox-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(4, 6, 12, 0.94);
+    backdrop-filter: blur(30px);
+}
+
+.lightbox-content {
+    position: relative;
+    z-index: 10;
+    max-width: 95vw;
+    max-height: 94vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: zoomLightbox 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lightbox-content img {
+    max-width: 100%;
+    max-height: 75vh;
+    border-radius: 18px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95), 0 0 40px rgba(139, 92, 246, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    object-fit: contain;
+}
+
+.lightbox-close-btn {
+    position: absolute;
+    top: -15px;
+    right: -15px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(22, 28, 46, 0.95);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+    transition: all 0.2s ease;
+}
+
+.lightbox-close-btn:hover {
+    background: #ef4444;
+    transform: rotate(90deg);
+}
+
+.lightbox-actions {
+    margin-top: 14px;
+}
+
+.download-btn {
+    background: linear-gradient(135deg, #7c3aed, #2563eb);
+    color: #fff;
+    padding: 12px 26px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 14.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    box-shadow: 0 4px 25px rgba(124, 58, 237, 0.45);
+    transition: all 0.2s ease;
+}
+
+.download-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 30px rgba(124, 58, 237, 0.65);
+}
+
+@media (max-width: 768px) {
+    .lightbox-close-btn {
+        top: 8px !important;
+        right: 8px !important;
+        width: 36px !important;
+        height: 36px !important;
+    }
+    .lightbox-content img {
+        max-height: 70vh !important;
+    }
+    .img-loader-shimmer-box {
+        height: 160px !important;
+    }
+}

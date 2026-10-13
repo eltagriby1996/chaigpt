@@ -747,6 +747,44 @@ function streamTextMessage(containerEl, fullText) {
     step();
 }
 
+function showImageLoadingSkeleton(cleanPrompt) {
+    const messagesList = document.getElementById('messages-list');
+    const skeleton = document.createElement('div');
+    skeleton.className = 'message-wrapper ai';
+    skeleton.id = 'ai-image-loading-skeleton';
+    skeleton.innerHTML = `
+        <div class="message-avatar">${ICONS.tea}</div>
+        <div class="message-body">
+            <div class="message-bubble image-generating-bubble">
+                <div class="image-generator-loader">
+                    <div class="img-loader-shimmer-box">
+                        <div class="img-loader-shimmer-art">
+                            <div class="img-loader-shimmer-glow"></div>
+                            <div class="img-loader-center-icon">
+                                <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="img-loader-info">
+                        <div class="img-loader-status" id="img-loader-status">
+                            🎨 جاري التفكير وصياغة تفاصيل الصورة بذكاء جيميناي...
+                        </div>
+                        <div class="img-loader-prompt">"${cleanPrompt}"</div>
+                        <div class="brewing-progress-bar"><div class="brewing-progress-glow"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    messagesList.appendChild(skeleton);
+    scrollToBottom();
+}
+
+function removeImageLoadingSkeleton() {
+    const skeleton = document.getElementById('ai-image-loading-skeleton');
+    if (skeleton) skeleton.remove();
+}
+
 function showLoadingSkeleton() {
     const messagesList = document.getElementById('messages-list');
     const skeleton = document.createElement('div');
@@ -913,10 +951,47 @@ async function sendPromptToGemini(userText, mediaObj = null) {
 
 // ----------------- 4K Image Generation Engine -----------------
 
-async function generate4KArt(prompt) {
+async function loadAndCleanImage(rawUrl) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const timeout = setTimeout(() => {
+            resolve(rawUrl);
+        }, 22000);
+
+        img.onload = () => {
+            clearTimeout(timeout);
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                // Crop bottom 48px to eliminate Pollinations watermark completely
+                const cropH = Math.max(img.naturalHeight - 48, 100);
+                canvas.width = img.naturalWidth;
+                canvas.height = cropH;
+                ctx.drawImage(img, 0, 0, img.naturalWidth, cropH, 0, 0, canvas.width, cropH);
+                const cleanDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+                resolve(cleanDataUrl);
+            } catch (err) {
+                console.warn("Canvas crop fallback:", err);
+                resolve(rawUrl);
+            }
+        };
+
+        img.onerror = () => {
+            clearTimeout(timeout);
+            resolve(rawUrl);
+        };
+
+        img.src = rawUrl;
+    });
+}
+
+async function generate4KArt(prompt, onStatusUpdate = null) {
     let enhancedPrompt = prompt;
 
-    // Step 1: Gemini Visual Director & Prompt Engineer (Unlimited High-Quality Masterpiece Generation)
+    // Step 1: Gemini Visual Director & Strict Prompt Compiler
+    if (onStatusUpdate) onStatusUpdate("🎨 جاري التفكير وصياغة تفاصيل الصورة بذكاء جيميناي...");
+
     for (const key of API_KEYS) {
         let success = false;
         for (const model of MODELS) {
@@ -929,10 +1004,13 @@ async function generate4KArt(prompt) {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{
+                        system_instruction: {
                             parts: [{
-                                text: `You are ChaiGPT Elite Visual Director & Masterpiece Prompt Engineer. Transform the following user request into an ultra-detailed, photorealistic, cinematic 8K English prompt for Flux/Midjourney. Include cinematic lighting, volumetric atmosphere, octane render, 85mm lens f/1.4, award-winning photography, hyperrealistic textures, no text, no blur. Return ONLY the enhanced English prompt (max 40 words), no preamble, no markdown, no quotes:\n\nUser request: ${prompt}`
+                                text: "You are an AI image prompt compiler. Convert the user request into a single descriptive, photorealistic English prompt for Flux/Midjourney. Output ONLY the raw prompt text (max 35 words). Never explain, never converse, never use bullet points or markdown quotes."
                             }]
+                        },
+                        contents: [{
+                            parts: [{ text: prompt }]
                         }]
                     }),
                     signal: controller.signal
@@ -943,9 +1021,12 @@ async function generate4KArt(prompt) {
                     const data = await enhanceRes.json();
                     const textCandidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (textCandidate && textCandidate.trim().length > 5) {
-                        enhancedPrompt = textCandidate.trim().replace(/^[\"\']|[\"\']$/g, '');
-                        success = true;
-                        break;
+                        let cleaned = textCandidate.trim().replace(/^["']|["']$/g, '').replace(/^\*\*|\*\*$/g, '');
+                        if (!cleaned.toLowerCase().startsWith("the direct") && !cleaned.toLowerCase().startsWith("here")) {
+                            enhancedPrompt = cleaned;
+                            success = true;
+                            break;
+                        }
                     }
                 }
             } catch (err) {
@@ -955,13 +1036,18 @@ async function generate4KArt(prompt) {
         if (success) break;
     }
 
-    // Step 2: Ultra-HD Seeded Render via Flux Engine (Zero Watermarks, 1024x1024, Unlimited)
+    if (onStatusUpdate) onStatusUpdate("✨ جاري رسم وتوليد الصورة بدقة 4K فائقة ومحرك فلكس...");
+
+    // Step 2: Render via Seeded Flux Engine
     const seed = Math.floor(Math.random() * 9000000) + 1000000;
     const encoded = encodeURIComponent(enhancedPrompt);
-    const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&model=flux&nologo=true&seed=${seed}`;
+    const rawImageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&model=flux&nologo=true&seed=${seed}`;
+
+    // Step 3: Preload and crop off the watermark completely via Canvas
+    const finalCleanUrl = await loadAndCleanImage(rawImageUrl);
 
     return {
-        imageUrl: imageUrl,
+        imageUrl: finalCleanUrl,
         enhancedPrompt: enhancedPrompt
     };
 }
@@ -1026,16 +1112,26 @@ async function handleSendMessage() {
             const cleanPrompt = text
                 .replace(/^\s*(\/image|ارسم لي|ارسم|عاوز صورة لـ|عايز صورة لـ|اعملي صورة لـ|عاوز صورة|عايز صورة|اعملي صورة|صورة لـ|صورة|توليد صورة)\s*/i, '')
                 .trim() || text;
-            const artResult = await generate4KArt(cleanPrompt);
 
+            // Remove standard skeleton and show specialized image loading shimmer card
             removeLoadingSkeleton();
+            showImageLoadingSkeleton(cleanPrompt);
 
-            if (artResult) {
+            const statusCallback = (newStatusText) => {
+                const statusEl = document.getElementById('img-loader-status');
+                if (statusEl) statusEl.textContent = newStatusText;
+            };
+
+            const artResult = await generate4KArt(cleanPrompt, statusCallback);
+
+            removeImageLoadingSkeleton();
+
+            if (artResult && artResult.imageUrl) {
                 const aiMsgId = 'ai_' + Date.now();
                 const aiMsg = {
                     id: aiMsgId,
                     role: 'ai',
-                    text: `✨ اتفضل يا غالي، صممتلك الصورة بجودة سينمائية 4K فائقة عبر ذكاء جيميناي ومحرك فلكس وبدون أي حدود: **${cleanPrompt}**`,
+                    text: `✨ اتفضل يا غالي، صممتلك الصورة بجودة سينمائية 4K فائقة ونظيفة تماماً بدون أي لوجو:\n**${cleanPrompt}**`,
                     isArt: true,
                     artUrl: artResult.imageUrl,
                     timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })

@@ -124,17 +124,18 @@ def ask_gemini(chat_id: int, prompt: str, media_bytes: bytes = None, mime_type: 
     return "معلش يا غالي، كان فيه ضغط لحظي على السيرفر، ابعتلي رسالتك تاني حالا وهرد عليك فوراً! 🫡"
 
 def enhance_image_prompt(arabic_prompt: str) -> str:
-    """تحويل وتحسين وصف الصورة إلى الإنجليزية عبر ذكاء جيميناي لأعلى جودة سينمائية"""
+    """تحويل وتحسين وصف الصورة إلى الإنجليزية عبر ذكاء جيميناي لأعلى جودة سينمائية وبدون رغي"""
     for model in MODELS:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
             req_body = {
-                "contents": [{
+                "system_instruction": {
                     "parts": [{
-                        "text": f"""You are ChaiGPT Elite Visual Director & Masterpiece Prompt Engineer. Transform this user description into an ultra-detailed, photorealistic, cinematic 8K English prompt for Flux/Midjourney. Include cinematic volumetric lighting, atmospheric depth, octane render, 85mm lens f/1.4, award-winning photography, hyperrealistic textures, no text, no blur. Return ONLY the enhanced English prompt (max 40 words), no preamble, no quotes:
-
-User request: {arabic_prompt}"""
+                        "text": "You are an AI image prompt compiler. Convert the user request into a single descriptive, photorealistic English prompt for Flux/Midjourney. Output ONLY the raw prompt text (max 35 words). Never explain, never converse, never use bullet points or markdown quotes."
                     }]
+                },
+                "contents": [{
+                    "parts": [{"text": arabic_prompt}]
                 }]
             }
             res = requests.post(url, json=req_body, timeout=10)
@@ -142,8 +143,8 @@ User request: {arabic_prompt}"""
                 data = res.json()
                 if "candidates" in data and data["candidates"]:
                     candidate = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                    cleaned = candidate.replace('"', '').replace("'", "")
-                    if len(cleaned) > 5:
+                    cleaned = candidate.replace('"', '').replace("'", "").replace("**", "")
+                    if len(cleaned) > 5 and not cleaned.lower().startswith("the direct") and not cleaned.lower().startswith("here"):
                         return cleaned
         except Exception:
             continue
