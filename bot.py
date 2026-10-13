@@ -27,11 +27,9 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 # نماذج سريعة ومستقرة بدون أي حدود ضيقة (1500 رسالة يومياً)
 MODELS = [
-    "gemini-flash-lite-latest",
-    "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
-    "gemini-3.6-flash",
-    "gemini-3.7-flash"
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3-flash-preview"
 ]
 
 # ----------------- نظام الذاكرة والسياق (Memory) -----------------
@@ -106,6 +104,19 @@ def ask_gemini(chat_id: int, prompt: str, media_bytes: bytes = None, mime_type: 
         except Exception:
             continue
             
+    # Pollinations Fallback for Telegram
+    try:
+        from urllib.parse import quote
+        f_url = f"https://text.pollinations.ai/{quote(prompt or 'مرحبا')}?system={quote('أنت شاي GPT المساعد المصري الذكي الخارق، أجب دائماً باللهجة المصرية الودودة.')}&model=openai"
+        f_res = requests.get(f_url, timeout=10)
+        if f_res.status_code == 200 and f_res.text.strip():
+            reply_text = f_res.text.strip()
+            add_to_history(chat_id, "user", prompt or "[تم إرسال وسائط]")
+            add_to_history(chat_id, "model", reply_text)
+            return reply_text
+    except Exception:
+        pass
+
     return "معلش يا غالي، كان فيه ضغط لحظي على السيرفر، ابعتلي رسالتك تاني حالا وهرد عليك فوراً! 🫡"
 
 def enhance_image_prompt(arabic_prompt: str) -> str:

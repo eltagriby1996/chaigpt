@@ -9,8 +9,10 @@ const _k2 = "omwjk7_PQMe_9NiY3vazgj8tlsVjsBw";
 const GEMINI_API_KEY = _k1 + _k2;
 
 const MODELS = [
-    "gemini-flash-lite-latest",
-    "gemini-3.8-flash"
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3-flash-preview",
+    "gemini-flash-latest"
 ];
 
 // ----------------- State Management -----------------
@@ -763,11 +765,11 @@ function getPersonaInstruction() {
 
 async function sendPromptToGemini(userText, mediaObj = null) {
     const chat = getCurrentChat();
-    if (!chat) return;
+    if (!chat) return "حدث خطأ في تحميل المحادثة.";
 
     // Build multi-turn contents array from past messages
     const contents = [];
-    const recentMessages = chat.messages.slice(-14); // Keep last 14 turns for context and speed
+    const recentMessages = chat.messages.slice(-12);
 
     recentMessages.forEach(m => {
         if (m.role === 'user') {
@@ -793,10 +795,12 @@ async function sendPromptToGemini(userText, mediaObj = null) {
             }
         });
     }
-    // Always reinforce Egyptian Arabic in every user turn so Gemini NEVER reverts to English
-    const promptText = (userText || "أجب على هذا الطلب بالتفصيل وبشكل مفيد.").trim();
+
+    const promptText = (userText || "أجب عن سؤالي بذكاء وبالمصري.").trim();
     const isExplicitEnglish = promptText.includes("ترجم للإنجليزي") || promptText.includes("write in english") || promptText.includes("translate to english");
-    const langDirective = isExplicitEnglish ? "" : "\n\n(توجيه إلزامي: أجب باللغة العربية حصراً وباللهجة المصرية الحية الذكية مثل ChatGPT المصري تماماً. ممنوع الرد بالإنجليزية).";
+    const langDirective = isExplicitEnglish ? "" : "
+
+(توجيه إلزامي: أجب باللغة العربية حصراً وباللهجة المصرية الحية الذكية مثل ChatGPT المصري تماماً).";
 
     currentParts.push({
         text: promptText + langDirective
@@ -814,28 +818,58 @@ async function sendPromptToGemini(userText, mediaObj = null) {
         contents: contents
     };
 
-    // Auto-Failover through reliable models
+    // 1. Primary Engine: Ultra-Fast Google Gemini Failover with 7s Timeout
     for (const model of MODELS) {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 7000);
+
             const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
 
             if (res.ok) {
                 const data = await res.json();
-                if (data.candidates && data.candidates[0].content.parts[0].text) {
+                if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) {
                     return data.candidates[0].content.parts[0].text;
                 }
+            } else {
+                console.warn(`Model ${model} returned status ${res.status}`);
             }
         } catch (err) {
-            console.warn(`Model ${model} failed, trying next...`);
+            console.warn(`Model ${model} timeout or error:`, err);
         }
     }
 
-    return "معلش يا باشا، كان فيه ضغط لحظي على السيرفرات، جرب تدوس إعادة التوليد أو اسألني تاني وهكون معاك تمام! 🫡";
+    // 2. High-Speed Secondary Engine (Zero-Failure Fallback)
+    try {
+        console.info("Switching to ChaiGPT High-Speed Fallback Engine...");
+        const sysPrompt = encodeURIComponent(getPersonaInstruction());
+        const userPrompt = encodeURIComponent(promptText);
+        const fallbackUrl = `https://text.pollinations.ai/${userPrompt}?system=${sysPrompt}&model=openai`;
+        
+        const fController = new AbortController();
+        const fTimeoutId = setTimeout(() => fController.abort(), 9000);
+        
+        const fRes = await fetch(fallbackUrl, { signal: fController.signal });
+        clearTimeout(fTimeoutId);
+
+        if (fRes.ok) {
+            const fText = await fRes.text();
+            if (fText && fText.trim().length > 0) {
+                return fText.trim();
+            }
+        }
+    } catch (fErr) {
+        console.warn("Fallback engine timeout/error:", fErr);
+    }
+
+    return "يا هلا بيك يا باشا! حصل ضغط لحظي بسيط على شبكة الذكاء الاصطناعي.. اضغط إعادة الإرسال أو اسألني تاني وهكون معاك فوراً بروقان! ☕🫡";
 }
 
 // ----------------- 4K Image Generation Engine -----------------
@@ -843,7 +877,7 @@ async function sendPromptToGemini(userText, mediaObj = null) {
 async function generate4KArt(prompt) {
     try {
         // Step 1: Translate & Enhance Prompt via Fast Gemini
-        const enhanceUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${GEMINI_API_KEY}`;
+        const enhanceUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
         const enhanceRes = await fetch(enhanceUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
