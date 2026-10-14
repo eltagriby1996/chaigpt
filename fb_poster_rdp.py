@@ -209,6 +209,17 @@ def run_rdp_poster():
                         text_input.fill(POST_TEXT)
                         time.sleep(2)
 
+                        # رفع صورة العرض إذا كانت متوفرة
+                        offer_img = os.path.join(WORKSPACE_DIR, "offer.jpg")
+                        if os.path.exists(offer_img):
+                            try:
+                                file_input = page.locator("input[type='file'][accept*='image']").first
+                                if file_input.is_attached():
+                                    file_input.set_input_files(offer_img)
+                                    time.sleep(4)
+                            except Exception as img_err:
+                                print(f"[!] Warning attaching image: {img_err}")
+
                         post_btn = page.locator("div[role='dialog'] div[role='button']:has-text('نشر'), div[role='dialog'] div[role='button']:has-text('Post')").first
                         if post_btn.is_visible():
                             post_btn.click()
