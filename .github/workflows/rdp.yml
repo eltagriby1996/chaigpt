@@ -33,10 +33,23 @@ jobs:
         Copy-Item $rclonePath "$env:GITHUB_WORKSPACE\rclone.exe"
 
     - name: Configure Rclone with Mega
+      continue-on-error: true
+      env:
+        MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
+        MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
       run: |
-        $obscuredPass = .\rclone.exe obscure "${{ secrets.MEGA_PASSWORD }}"
-        .\rclone.exe config create mymega mega user "${{ secrets.MEGA_EMAIL }}" pass "$obscuredPass"
-        .\rclone.exe mkdir mymega:RDP_Backup
+        if ([string]::IsNullOrWhiteSpace($env:MEGA_EMAIL) -or [string]::IsNullOrWhiteSpace($env:MEGA_PASSWORD)) {
+            Write-Host "ℹ️ Mega credentials not set in secrets. Skipping Mega configuration."
+            exit 0
+        }
+        try {
+            $obscuredPass = .\rclone.exe obscure "$env:MEGA_PASSWORD"
+            .\rclone.exe config create mymega mega user "$env:MEGA_EMAIL" pass "$obscuredPass"
+            .\rclone.exe mkdir mymega:RDP_Backup
+            Write-Host "✅ Mega configured successfully!"
+        } catch {
+            Write-Warning "⚠️ Mega setup warning: $_"
+        }
 
     - name: Authenticate Ngrok
       run: |
@@ -68,12 +81,17 @@ jobs:
         Set-LocalUser -Name "monged123" -PasswordNeverExpires $true -ErrorAction SilentlyContinue
 
     - name: Restore Previous Work from Mega
+      continue-on-error: true
       run: |
         $savedWork = "C:\Users\Public\Desktop\SavedWork"
         New-Item -ItemType Directory -Force -Path $savedWork | Out-Null
-        Write-Host "Restoring files from Mega..."
-        .\rclone.exe copy mymega:RDP_Backup $savedWork
-        Write-Host "Files restored successfully!"
+        try {
+            Write-Host "Restoring files from Mega if available..."
+            .\rclone.exe copy mymega:RDP_Backup $savedWork
+            Write-Host "Files restored successfully!"
+        } catch {
+            Write-Warning "⚠️ Mega restore skipped: $_"
+        }
 
     - name: Launch AI Bot in Background
       env:
@@ -160,22 +178,27 @@ jobs:
 
     - name: Auto-Save Workspace to Mega & Notify Telegram
       if: always()
+      continue-on-error: true
       run: |
         $savedWork = "C:\Users\Public\Desktop\SavedWork"
         if (Test-Path $savedWork) {
-            Write-Host "Syncing work to Mega..."
-            .\rclone.exe sync $savedWork mymega:RDP_Backup
-            Write-Host "Backup completed!"
+            try {
+                Write-Host "Syncing work to Mega..."
+                .\rclone.exe sync $savedWork mymega:RDP_Backup
+                Write-Host "Backup completed!"
 
-            $botToken = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("ODc5NTAyNjE5OTpBQUVvWTRjMGZPU0ViMXQya2RxMzZPOE9uRVdieENrSFF4RQ=="))
-            $chatId = "7815806102"
-            $alertMsg = "💾 <b>تم حفظ كل ملفاتك من SavedWork إلى حساب Mega بنجاح!</b>`n`nالأرديبي التالي سيبدأ تلقائياً ويسترجع ملفاتك."
-            
-            $body = @{
-                chat_id = $chatId
-                text = $alertMsg
-                parse_mode = "HTML"
-            } | ConvertTo-Json
+                $botToken = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("ODc5NTAyNjE5OTpBQUVvWTRjMGZPU0ViMXQya2RxMzZPOE9uRVdieENrSFF4RQ=="))
+                $chatId = "7815806102"
+                $alertMsg = "💾 <b>تم حفظ كل ملفاتك من SavedWork إلى حساب Mega بنجاح!</b>`n`nالأرديبي التالي سيبدأ تلقائياً ويسترجع ملفاتك."
+                
+                $body = @{
+                    chat_id = $chatId
+                    text = $alertMsg
+                    parse_mode = "HTML"
+                } | ConvertTo-Json
 
-            Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $body
+                Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $body
+            } catch {
+                Write-Warning "Auto-save to Mega skipped: $_"
+            }
         }
