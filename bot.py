@@ -1,6 +1,15 @@
 import random
 import os
 import sys
+
+# Force UTF-8 encoding for Windows console
+if sys.platform.startswith('win'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 import json
 import time
 import base64
@@ -298,7 +307,7 @@ def handle_text(message):
     bot.reply_to(message, reply)
 
 if __name__ == "__main__":
-    print("🤖 بوت الذكاء الاصطناعي شغال ومستعد لاستقبال رسائلك مع نظام الذاكرة الكامل...")
+    print("[+] ChaiGPT AI Bot (@starter_rdppbot) is running with full memory...")
     while True:
         try:
             bot.infinity_polling(timeout=25, long_polling_timeout=25)

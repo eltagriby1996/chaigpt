@@ -1,5 +1,14 @@
 import os
 import sys
+
+# Force UTF-8 encoding for Windows console to prevent UnicodeEncodeError
+if sys.platform.startswith('win'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 import json
 import time
 import base64
@@ -368,7 +377,7 @@ def handle_messages(message):
     bot.reply_to(message, reply, reply_markup=quick_markup)
 
 if __name__ == "__main__":
-    print("🍊 بوت Orange DSL الرسمي (@OrangeDsI_bot) يعمل ومستعد لاستقبال العملاء 24/7...")
+    print("[+] Orange DSL Bot (@OrangeDsI_bot) is active and listening for customers 24/7...")
     while True:
         try:
             bot.infinity_polling(timeout=25, long_polling_timeout=25)
