@@ -14,10 +14,16 @@ jobs:
   rdp-setup:
     runs-on: windows-latest
     timeout-minutes: 360  # الحد الأقصى 6 ساعات
+    permissions:
+      contents: write
+      actions: read
 
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 1
 
     - name: Download Tools (Ngrok & Rclone)
       run: |
@@ -89,6 +95,16 @@ jobs:
             Write-Host "Restoring files from Mega if available..."
             .\rclone.exe copy mymega:RDP_Backup $savedWork
             Write-Host "Files restored successfully!"
+
+            # استرجاع الكوكيز والتقدم تلقائياً لضمان الاستمرارية
+            if (Test-Path "$savedWork\fb_cookies.json") {
+                Copy-Item "$savedWork\fb_cookies.json" "$env:GITHUB_WORKSPACE\fb_cookies.json" -Force
+                Write-Host "✅ Restored fb_cookies.json from Mega backup!"
+            }
+            if (Test-Path "$savedWork\posted_groups.txt") {
+                Get-Content "$savedWork\posted_groups.txt" | Add-Content "$env:GITHUB_WORKSPACE\posted_groups.txt"
+                Write-Host "✅ Merged posted_groups.txt from Mega backup!"
+            }
         } catch {
             Write-Warning "⚠️ Mega restore skipped: $_"
         }
@@ -215,6 +231,16 @@ jobs:
       continue-on-error: true
       run: |
         $savedWork = "C:\Users\Public\Desktop\SavedWork"
+        New-Item -ItemType Directory -Force -Path $savedWork | Out-Null
+        
+        # حفظ الكوكيز وسجل الجروبات المنشورة لضمان الاستمرارية
+        if (Test-Path "$env:GITHUB_WORKSPACE\fb_cookies.json") {
+            Copy-Item "$env:GITHUB_WORKSPACE\fb_cookies.json" "$savedWork\fb_cookies.json" -Force -ErrorAction SilentlyContinue
+        }
+        if (Test-Path "$env:GITHUB_WORKSPACE\posted_groups.txt") {
+            Copy-Item "$env:GITHUB_WORKSPACE\posted_groups.txt" "$savedWork\posted_groups.txt" -Force -ErrorAction SilentlyContinue
+        }
+
         if (Test-Path $savedWork) {
             try {
                 Write-Host "Syncing work to Mega..."

@@ -108,12 +108,40 @@ def load_cookies():
 def get_posted_groups():
     if os.path.exists(POSTED_FILE):
         with open(POSTED_FILE, "r", encoding="utf-8") as f:
-            return set(l.strip() for l in f if l.strip())
+            return set(l.strip() for l in f if l.strip() and not l.strip().startswith("#"))
     return set()
+
+def sync_progress():
+    """مزامنة التقدم إلى SavedWork وإلى جيت هاب تلقائياً لضمان استئناف النشر من آخر نقطة عند تجديد الأرديبي"""
+    # 1. حفظ نسخة في SavedWork لميجا
+    saved_work = r"C:\Users\Public\Desktop\SavedWork"
+    if os.path.exists(saved_work):
+        try:
+            import shutil
+            if os.path.exists(POSTED_FILE):
+                shutil.copy2(POSTED_FILE, os.path.join(saved_work, "posted_groups.txt"))
+            if os.path.exists(COOKIES_FILE):
+                shutil.copy2(COOKIES_FILE, os.path.join(saved_work, "fb_cookies.json"))
+        except Exception:
+            pass
+
+    # 2. مزامنة التقدم عبر Git الكوميت التلقائي [skip ci]
+    try:
+        import subprocess
+        subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=False)
+        subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=False)
+        subprocess.run(["git", "add", "posted_groups.txt"], check=False)
+        res = subprocess.run(["git", "commit", "-m", "Auto-sync posted_groups progress [skip ci]"], capture_output=True, text=True)
+        if "nothing to commit" not in res.stdout.lower() and "nothing to commit" not in res.stderr.lower():
+            subprocess.run(["git", "push"], check=False)
+            print("[+] Progress synced back to GitHub repository successfully!")
+    except Exception as e:
+        print(f"[!] Warning syncing to git: {e}")
 
 def mark_posted(group_url):
     with open(POSTED_FILE, "a", encoding="utf-8") as f:
         f.write(group_url.strip() + "\n")
+    sync_progress()
 
 def get_target_groups():
     if not os.path.exists(GROUPS_FILE):
@@ -122,16 +150,27 @@ def get_target_groups():
         return [l.strip() for l in f if l.strip().startswith("http")]
 
 def run_rdp_poster():
-    print("[*] Starting RDP Autonomous Facebook Poster...")
+    print("[*] Starting RDP Autonomous Facebook Poster with Auto-Resume...")
     cookies = load_cookies()
     if not cookies:
         print("[!] No Facebook cookies found in fb_cookies.json or FB_COOKIES env.")
         send_telegram_alert("⚠️ <b>تنبيه من الأرديبي:</b> لم يتم العثور على كوكيز فيسبوك (fb_cookies.json). يرجى تزويدها لبدء النشر التلقائي.")
         return
 
-    from playwright.sync_api import sync_playwright
+    all_groups = get_target_groups()
+    posted = get_posted_groups()
+    pending = [g for g in all_groups if g not in posted]
 
-    send_telegram_alert("🚀 <b>تم بدء تشغيل سكريبت النشر التلقائي على الأرديبي بنجاح!</b>\nسيبدأ النشر في الجروبات بفواصل أمان ذكية، وستصلك رسالة بكل جروب يتم النشر فيه.")
+    startup_msg = (
+        f"🚀 <b>تم تشغيل سكريبت النشر التلقائي على الأرديبي!</b>\n\n"
+        f"📊 <b>إجمالي الجروبات:</b> {len(all_groups)} جروب\n"
+        f"✅ <b>تم النشر سابقاً:</b> {len(posted)} جروب\n"
+        f"🎯 <b>المتبقي للنشر:</b> {len(pending)} جروب\n\n"
+        f"🔄 <b>الاستمرارية:</b> سيبدأ النشر تلقائياً من الجروب رقم ({len(posted) + 1}) بدون أي تكرار!"
+    )
+    send_telegram_alert(startup_msg)
+
+    from playwright.sync_api import sync_playwright
 
     p = sync_playwright().start()
     browser = p.chromium.launch(
