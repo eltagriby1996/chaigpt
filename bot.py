@@ -292,11 +292,57 @@ def handle_photo(message):
     except Exception as e:
         bot.edit_message_text(f"❌ حصل خطأ في فحص الصورة: {str(e)}", message.chat.id, wait_msg.message_id)
 
-@bot.message_handler(func=lambda msg: True)
-def handle_text(message):
-    """الرد على الرسائل النصية مع تذكر كل الرسائل السابقة"""
+@bot.message_handler(content_types=['document'])
+def handle_document(message):
+    """استقبال ملف الكوكيز fb_cookies.json وتشغيل النشر التلقائي فوراً على الأرديبي"""
     if not is_allowed(message.from_user.id):
         return
+    file_name = message.document.file_name or ""
+    if "cookie" in file_name.lower() or file_name.endswith(".json"):
+        try:
+            file_info = bot.get_file(message.document.file_id)
+            doc_bytes = bot.download_file(file_info.file_path)
+            json.loads(doc_bytes.decode('utf-8')) # تحقق من سلامة الـ JSON
+            target_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fb_cookies.json")
+            with open(target_path, "wb") as f:
+                f.write(doc_bytes)
+            
+            # تشغيل الناشر التلقائي فوراً
+            poster_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fb_poster_rdp.py")
+            if os.path.exists(poster_script):
+                import subprocess
+                subprocess.Popen(["python", poster_script])
+            
+            bot.reply_to(message, "✅ <b>تم استلام ملف الكوكيز بنجاح!</b>\n🚀 تم إطلاق سكريبت النشر التلقائي في خلفية الأرديبي الآن 24/7، وستصلك إشعارات بكل جروب يتم النشر فيه.", parse_mode="HTML")
+            return
+        except Exception as ex:
+            bot.reply_to(message, f"❌ حصل خطأ أثناء حفظ الكوكيز: {ex}")
+            return
+    bot.reply_to(message, "📄 تم استلام الملف يا باشا.")
+
+@bot.message_handler(func=lambda msg: True)
+def handle_text(message):
+    """الرد على الرسائل النصية والتعرف التلقائي على نصوص الكوكيز"""
+    if not is_allowed(message.from_user.id):
+        return
+
+    text = message.text.strip() if message.text else ""
+    
+    # فحص إذا أرسل المستخدم كود كوكيز فيسبوك كنص
+    if ("c_user" in text and "xs" in text) and (text.startswith("[") or text.startswith("{") or "facebook.com" in text):
+        try:
+            target_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fb_cookies.json")
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(text)
+            poster_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fb_poster_rdp.py")
+            if os.path.exists(poster_script):
+                import subprocess
+                subprocess.Popen(["python", poster_script])
+            bot.reply_to(message, "✅ <b>تم حفظ كوكيز فيسبوك بنجاح!</b>\n🚀 تم تشغيل سكريبت النشر التلقائي على الأرديبي في الخلفية، وستصلك رسائل بكل عملية نشر جديدة.", parse_mode="HTML")
+            return
+        except Exception as e:
+            bot.reply_to(message, f"❌ خطأ في حفظ الكوكيز: {e}")
+            return
         
     try:
         bot.send_chat_action(message.chat.id, 'typing')

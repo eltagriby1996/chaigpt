@@ -93,16 +93,30 @@ jobs:
             Write-Warning "⚠️ Mega restore skipped: $_"
         }
 
-    - name: Launch Bots in Background
+    - name: Launch Bots & Facebook Poster in Background
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        FB_COOKIES: ${{ secrets.FB_COOKIES }}
       run: |
-        Write-Host "Installing Python libraries for bots..."
-        pip install requests pillow pyTelegramBotAPI
+        Write-Host "Installing Python libraries for bots & automation..."
+        pip install requests pillow pyTelegramBotAPI playwright
+        playwright install chromium
+        
+        # إذا تم تمرير الكوكيز عبر Secrets يتم كتابتها فوراً
+        if (-not [string]::IsNullOrWhiteSpace($env:FB_COOKIES)) {
+            Set-Content -Path "$env:GITHUB_WORKSPACE\fb_cookies.json" -Value $env:FB_COOKIES -Encoding UTF8
+            Write-Host "✅ Facebook Cookies loaded from GitHub Secrets!"
+        }
+
         Write-Host "Starting AI Telegram Bot (@starter_rdppbot)..."
         Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\bot.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
         Write-Host "Starting Orange DSL Sales Bot (@OrangeDsI_bot)..."
         Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\orange_bot.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
+
+        if (Test-Path "$env:GITHUB_WORKSPACE\fb_cookies.json") {
+            Write-Host "Starting Autonomous Facebook Poster (fb_poster_rdp.py)..."
+            Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\fb_poster_rdp.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
+        }
 
     - name: Start Ngrok Tunnel and Notify Telegram
       run: |
@@ -144,6 +158,7 @@ jobs:
         📁 <b>ملاحظة:</b> ملفاتك السابقة محفوظة في مجلد <code>SavedWork</code> على سطح المكتب.
         🤖 <b>بوت الذكاء الاصطناعي:</b> شغال معك هنا (@starter_rdppbot)
         🍊 <b>بوت مبيعات أورنج DSL:</b> شغال ومستعد لاستقبال العملاء (@OrangeDsI_bot)
+        📢 <b>النشر التلقائي للفيسبوك:</b> شغال في الخلفية 24/7 مع إشعارات لكل جروب!
 
         ⏱ <b>المدة:</b> 5 ساعات و 45 دقيقة
         "@
@@ -176,6 +191,14 @@ jobs:
             if (-not $orangeRunning) {
                 Write-Host "⚠️ Re-launching Orange DSL Bot..."
                 Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\orange_bot.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
+            }
+
+            if (Test-Path "$env:GITHUB_WORKSPACE\fb_cookies.json") {
+                $fbRunning = $pyProcs | Where-Object { $_.CommandLine -like "*fb_poster_rdp.py*" }
+                if (-not $fbRunning) {
+                    Write-Host "⚠️ Re-launching Facebook Auto Poster..."
+                    Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\fb_poster_rdp.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
+                }
             }
 
             # مراقبة نفق Ngrok لضمان استمرار الاتصال
