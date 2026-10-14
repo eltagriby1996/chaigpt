@@ -37,13 +37,13 @@ def send_telegram_alert(message: str):
     except Exception as e:
         print(f"[!] Telegram notify error: {e}")
 
-# ----------------- نص البوست المعتمد (النموذج الثاني) -----------------
+# ----------------- نص البوست المعتمد والمثالي بدون روابط خارجية -----------------
 POST_TEXT = """وفّر نص فاتورتك الشهرية مع أقوى عروض الإنترنت المنزلي من Orange DSL 🍊🔥
 
 عرض التوفير الأكبر (سواء خط أرضي جديد أو تحويل من شركتك الحالية):
-✅ شهر مجاناً بالكامل بدون اشتراك.
-✅ خصم 50% لمدة 6 شهور.
-✅ التحويل بيتم خلال 48 ساعة بدون انقطاع للخدمة.
+✅ شهر مجاناً بالكامل بدون اشتراك
+✅ خصم 50% لمدة 6 شهور
+✅ التحويل بيتم خلال 48 ساعة بدون انقطاع للخدمة
 
 📊 الأسعار شاملة الضريبة:
 • 200 جيجا ⬅️ 211 جنيه
@@ -52,9 +52,8 @@ POST_TEXT = """وفّر نص فاتورتك الشهرية مع أقوى عرو�
 • 500 جيجا ⬅️ 422 جنيه
 • 750 جيجا ⬅️ 591 جنيه
 
-📩 للحجز والاستعلام، تواصل معنا فوراً على الواتساب:
-01003061972
-رابط واتساب مباشر: wa.me/201003061972"""
+📩 للحجز والاستعلام تواصل معنا واتساب:
+01003061972"""
 
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
 GROUPS_FILE = os.path.join(WORKSPACE_DIR, "groups.txt")
@@ -237,38 +236,75 @@ def run_rdp_poster():
                     time.sleep(15)
                     continue
 
-                # 3. صندوق المنشور فُتح بنجاح: الانتظار والكتابة
+                # 3. صندوق المنشور فُتح بنجاح: التركيز والكتابة مع الحفاظ على الأسطر بدقة
                 time.sleep(3)
-                typed = page.evaluate("""(text) => {
+                focused = page.evaluate("""() => {
                     const editors = Array.from(document.querySelectorAll("div[role='textbox'], div[contenteditable='true']"));
                     const postEditor = editors.find(el => {
                         const aria = el.getAttribute('aria-label') || '';
                         return el.offsetParent !== null && !aria.includes('تعليق') && !aria.includes('Comment');
                     });
-                    if (!postEditor) return false;
-                    postEditor.focus();
-                    document.execCommand('insertText', false, text);
-                    return true;
-                }""", POST_TEXT)
+                    if (postEditor) {
+                        postEditor.focus();
+                        return true;
+                    }
+                    return false;
+                }""")
 
-                if not typed:
+                if not focused:
                     print("[!] Failed to focus post editor. Skipping.")
                     mark_posted(group_url)
                     time.sleep(15)
                     continue
 
+                # كتابة النص سطراً بسطر مع Shift+Enter لضمان الحفاظ على المسافات والشكل الجمالي
+                paragraphs = POST_TEXT.split('\n')
+                for i, para in enumerate(paragraphs):
+                    if para:
+                        page.keyboard.type(para, delay=10)
+                    page.keyboard.press("Shift+Enter")
+                    time.sleep(0.05)
+
                 time.sleep(2)
 
-                # 4. رفع صورة العرض المعتمدة
+                # 4. رفع صورة العروض الرسمية (offer.jpg)
                 if os.path.exists(OFFER_IMG):
+                    print("[*] Uploading offer image...")
                     try:
-                        file_inputs = page.locator("input[type='file'][accept*='image']").all()
-                        for fi in file_inputs:
-                            fi.set_input_files(OFFER_IMG)
-                            time.sleep(4)
-                            break
+                        with page.expect_file_chooser(timeout=7000) as fc_info:
+                            page.evaluate("""() => {
+                                const btns = Array.from(document.querySelectorAll("div[role='dialog'] div[role='button'], div[role='dialog'] div[aria-label]"));
+                                for (let b of btns) {
+                                    const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                                    if (aria.includes('صورة') || aria.includes('photo') || aria.includes('video')) {
+                                        b.click();
+                                        return;
+                                    }
+                                }
+                            }""")
+                        file_chooser = fc_info.value
+                        file_chooser.set_files(OFFER_IMG)
+                        print("[+] Successfully attached offer.jpg to the post!")
+                        time.sleep(5)
                     except Exception as img_err:
-                        print(f"[!] Warning uploading image: {img_err}")
+                        print(f"[!] File chooser direct click error: {img_err}")
+                        try:
+                            page.evaluate("""() => {
+                                const btns = Array.from(document.querySelectorAll("div[role='dialog'] div[role='button'], div[role='dialog'] div[aria-label]"));
+                                for (let b of btns) {
+                                    const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                                    if (aria.includes('صورة') || aria.includes('photo') || aria.includes('video')) {
+                                        b.click();
+                                        return;
+                                    }
+                                }
+                            }""")
+                            time.sleep(2)
+                            fi = page.locator("div[role='dialog'] input[type='file'], input[type='file']").first
+                            fi.set_input_files(OFFER_IMG)
+                            time.sleep(5)
+                        except Exception as e2:
+                            print(f"[!] Fallback input error: {e2}")
 
                 # 5. النقر على زر النشر
                 published = page.evaluate("""() => {
