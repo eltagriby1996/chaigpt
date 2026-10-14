@@ -93,14 +93,16 @@ jobs:
             Write-Warning "⚠️ Mega restore skipped: $_"
         }
 
-    - name: Launch AI Bot in Background
+    - name: Launch Bots in Background
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       run: |
-        Write-Host "Installing Python libraries for AI bot..."
+        Write-Host "Installing Python libraries for bots..."
         pip install requests pillow pyTelegramBotAPI
-        Write-Host "Starting AI Telegram Bot..."
+        Write-Host "Starting AI Telegram Bot (@starter_rdppbot)..."
         Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\bot.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
+        Write-Host "Starting Orange DSL Sales Bot (@OrangeDsI_bot)..."
+        Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\orange_bot.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
 
     - name: Start Ngrok Tunnel and Notify Telegram
       run: |
@@ -128,7 +130,7 @@ jobs:
         $chatId = "7815806102"
         
         $message = @"
-        🚀 <b>تم تشغيل الأرديبي وبوت الذكاء الاصطناعي بنجاح!</b>
+        🚀 <b>تم تشغيل الأرديبي والبوتات بنجاح!</b>
 
         🖥 <b>IP / Port:</b>
         <code>$rdpAddress</code>
@@ -140,7 +142,8 @@ jobs:
         <code>Ahmed@123</code>
 
         📁 <b>ملاحظة:</b> ملفاتك السابقة محفوظة في مجلد <code>SavedWork</code> على سطح المكتب.
-        🤖 <b>بوت الذكاء الاصطناعي شغال معك في نفس هذا الشات (@starter_rdppbot)! كلمني هنا وهرد عليك فوراً وبدون حدود.</b>
+        🤖 <b>بوت الذكاء الاصطناعي:</b> شغال معك هنا (@starter_rdppbot)
+        🍊 <b>بوت مبيعات أورنج DSL:</b> شغال ومستعد لاستقبال العملاء (@OrangeDsI_bot)
 
         ⏱ <b>المدة:</b> 5 ساعات و 45 دقيقة
         "@
@@ -161,11 +164,18 @@ jobs:
             Start-Sleep -Seconds 60
             Write-Host "⏱️ Heartbeat: RDP is active ($m / $totalMinutes minutes elapsed)..."
             
-            # مراقبة وإعادة تشغيل البوت تلقائياً لو توقف لأي سبب
-            $botRunning = Get-Process -Name "python" -ErrorAction SilentlyContinue
+            # مراقبة وإعادة تشغيل البوتات تلقائياً لو توقفت لأي سبب
+            $pyProcs = Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" -ErrorAction SilentlyContinue
+            $botRunning = $pyProcs | Where-Object { $_.CommandLine -like "*bot.py*" }
             if (-not $botRunning) {
                 Write-Host "⚠️ Re-launching AI Telegram Bot..."
                 Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\bot.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
+            }
+
+            $orangeRunning = $pyProcs | Where-Object { $_.CommandLine -like "*orange_bot.py*" }
+            if (-not $orangeRunning) {
+                Write-Host "⚠️ Re-launching Orange DSL Bot..."
+                Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\orange_bot.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
             }
 
             # مراقبة نفق Ngrok لضمان استمرار الاتصال
