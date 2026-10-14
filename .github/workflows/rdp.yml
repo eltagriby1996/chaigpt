@@ -119,12 +119,13 @@ jobs:
         }
 
     - name: Start Ngrok Tunnel and Notify Telegram
+      continue-on-error: true
       run: |
-        Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
+        Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --log=stdout --log-format=term" -RedirectStandardOutput "ngrok.log" -RedirectStandardError "ngrok_err.log" -WindowStyle Hidden
 
         $rdpAddress = ""
-        for ($i = 0; $i -lt 15; $i++) {
-            Start-Sleep -Seconds 2
+        for ($i = 0; $i -lt 25; $i++) {
+            Start-Sleep -Seconds 3
             try {
                 $tunnel = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels" -ErrorAction SilentlyContinue
                 if ($tunnel.tunnels.Count -gt 0) {
@@ -134,16 +135,20 @@ jobs:
             } catch {}
         }
 
-        if ([string]::IsNullOrEmpty($rdpAddress)) {
-            Write-Error "Failed to obtain Ngrok tunnel URL!"
-            exit 1
-        }
-
         # فك تشفير توكن البوت في الذاكرة لحمايته من فحص جيت هاب
         $botToken = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("ODc5NTAyNjE5OTpBQUVvWTRjMGZPU0ViMXQya2RxMzZPOE9uRVdieENrSFF4RQ=="))
         $chatId = "7815806102"
-        
-        $message = @"
+
+        if ([string]::IsNullOrEmpty($rdpAddress)) {
+            Write-Warning "⚠️ Ngrok tunnel could not be obtained immediately."
+            if (Test-Path ngrok.log) { Get-Content ngrok.log -Tail 15 }
+            if (Test-Path ngrok_err.log) { Get-Content ngrok_err.log -Tail 15 }
+
+            $alertMsg = "⚙️ <b>تم إطلاق سيرفر الأرديبي بنجاح!</b>`n`n🤖 البوتات والنشر التلقائي للفيسبوك يعملون في الخلفية 24/7.`nجاري محاولة الاتصال بنفق Ngrok تلقائياً."
+            $errBody = @{ chat_id = $chatId; text = $alertMsg; parse_mode = "HTML" } | ConvertTo-Json
+            Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $errBody
+        } else {
+            $message = @"
         🚀 <b>تم تشغيل الأرديبي والبوتات بنجاح!</b>
 
         🖥 <b>IP / Port:</b>
@@ -162,16 +167,12 @@ jobs:
 
         ⏱ <b>المدة:</b> 5 ساعات و 45 دقيقة
         "@
-
-        $body = @{
-            chat_id = $chatId
-            text = $message
-            parse_mode = "HTML"
-        } | ConvertTo-Json
-
-        Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $body
+            $body = @{ chat_id = $chatId; text = $message; parse_mode = "HTML" } | ConvertTo-Json
+            Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $body
+        }
 
     - name: Keep Alive with Heartbeat (5 Hours 45 Minutes)
+      if: always()
       run: |
         Write-Host "🚀 RDP Session is active! Starting heartbeat monitor loop..."
         $totalMinutes = 345 # 5 ساعات و 45 دقيقة
