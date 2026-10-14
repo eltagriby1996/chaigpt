@@ -79,33 +79,63 @@ def run_browser(headless=False):
     from playwright.sync_api import sync_playwright
     p = sync_playwright().start()
     os.makedirs(PROFILE_DIR, exist_ok=True)
+    
+    # استخدام متصفح كروم المثبت على جهازك
+    chrome_path = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+    use_channel = "chrome" if os.path.exists(chrome_path) else None
+    
     browser = p.chromium.launch_persistent_context(
         user_data_dir=PROFILE_DIR,
         headless=headless,
-        channel="chrome" if os.path.exists("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe") else None,
+        channel=use_channel,
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         args=[
             "--disable-blink-features=AutomationControlled",
             "--no-sandbox",
-            "--disable-notifications"
+            "--disable-notifications",
+            "--disable-infobars",
+            "--start-maximized"
         ],
-        viewport={"width": 1280, "height": 800}
+        no_viewport=True
     )
+
+    # حيل تخطي كشف البوتات لصفحة الأمان والـ 2FA حتى لا تعلق في شاشة بيضاء
+    browser.add_init_script("""
+        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+        window.navigator.chrome = { runtime: {} };
+        Object.defineProperty(navigator, 'languages', {get: () => ['ar', 'en-US', 'en']});
+        Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+    """)
     return p, browser
 
 def login_mode():
-    print("\n[+] جاري فتح المتصفح لتسجيل الدخول فيسبوك...")
-    print("[!] برجاء تسجيل الدخول لحسابك وإغلاق المتصفح عند الانتهاء (سيتم حفظ الجلسة دائماً).\n")
+    print("\n" + "="*55)
+    print("  [1] OPENING FACEBOOK LOGIN (تسجيل الدخول)")
+    print("="*55)
+    print("[*] Chrome will open now.")
+    print("[*] Enter your Email & Password in the browser window.")
+    print("[*] If Facebook asks for 2-Step verification, approve it.")
+    print("="*55 + "\n")
+    
     p, context = run_browser(headless=False)
     page = context.new_page()
     page.goto("https://www.facebook.com")
-    print("[*] المتصفح مفتوح الآن أمامك.. سجل دخولك واضغط Enter في هذه الشاشة عند الانتهاء.")
-    input("[اضغط Enter هنا بعد إتمام تسجيل الدخول] > ")
-    context.close()
-    p.stop()
-    print("[✓] تم حفظ بيانات تسجيل الدخول بنجاح!")
+    print("\n[*] Browser is open now. Please complete your login.")
+    input("\n>> Press ENTER here AFTER you see your Facebook Feed / Home > ")
+    try:
+        context.close()
+    except Exception:
+        pass
+    try:
+        p.stop()
+    except Exception:
+        pass
+    print("\n[OK] Login session saved successfully! (تم حفظ الجلسة بنجاح)")
 
 def search_groups_mode():
-    print("\n[+] بدء البحث الذكي والتلقائي عن جروبات قرى ومراكز بني سويف...")
+    print("\n" + "="*55)
+    print("  [2] SEARCHING BENI SUEF VILLAGE GROUPS (بحث الجروبات)")
+    print("="*55)
     p, context = run_browser(headless=False)
     page = context.new_page()
     
@@ -113,15 +143,18 @@ def search_groups_mode():
     page.goto("https://www.facebook.com")
     time.sleep(3)
     if "login" in page.url or "checkpoint" in page.url:
-        print("[!] يبدو أنك لم تسجل الدخول بعد.. يرجى تسجيل الدخول أولاً من خيار (1).")
-        context.close()
-        p.stop()
+        print("[!] You are not logged in yet. Please choose option (1) first.")
+        try:
+            context.close()
+            p.stop()
+        except Exception:
+            pass
         return
 
     discovered = set(get_saved_groups())
     
     for idx, target in enumerate(BENI_SUEF_TARGETS, 1):
-        print(f"\n[*] [{idx}/{len(BENI_SUEF_TARGETS)}] جاري البحث عن: '{target}'...")
+        print(f"\n[*] [{idx}/{len(BENI_SUEF_TARGETS)}] Searching: '{target}'...")
         try:
             search_url = f"https://www.facebook.com/search/groups/?q={quote(target)}"
             page.goto(search_url, wait_until="domcontentloaded")
@@ -143,24 +176,29 @@ def search_groups_mode():
                         if "search" not in group_link and "create" not in group_link:
                             if group_link not in discovered:
                                 discovered.add(group_link)
-                                print(f"  [+] تم العثور على جروب جديد: {group_link}")
+                                print(f"  [+] Found new group: {group_link}")
 
             # حفظ فوري
             save_groups(discovered)
         except Exception as e:
-            print(f"  [!] خطأ أثناء البحث عن {target}: {e}")
+            print(f"  [!] Error searching {target}: {e}")
 
-    context.close()
-    p.stop()
-    print(f"\n[✓] اكتمل البحث! تم تجميع {len(discovered)} جروب في ملف groups.txt")
+    try:
+        context.close()
+        p.stop()
+    except Exception:
+        pass
+    print(f"\n[OK] Search finished! Total groups in groups.txt: {len(discovered)}")
 
 def auto_post_mode():
     groups = get_saved_groups()
     if not groups:
-        print("[!] لا توجد جروبات في ملف groups.txt. ابدأ أولاً بالبحث عن الجروبات خيار (2).")
+        print("[!] No groups found in groups.txt. Run option (2) first.")
         return
 
-    print(f"\n[+] بدء النشر التلقائي في {len(groups)} جروب مع الفواصل الآمنة...")
+    print("\n" + "="*55)
+    print(f"  [3] AUTO-POSTING TO {len(groups)} GROUPS (النشر التلقائي)")
+    print("="*55)
     p, context = run_browser(headless=False)
     page = context.new_page()
 
@@ -175,13 +213,11 @@ def auto_post_mode():
 
     success_count = 0
     for idx, group_url in enumerate(groups, 1):
-        print(f"\n[*] [{idx}/{len(groups)}] جاري الدخول للجروب: {group_url}")
+        print(f"\n[*] [{idx}/{len(groups)}] Opening group: {group_url}")
         try:
             page.goto(group_url, wait_until="domcontentloaded")
             time.sleep(random.uniform(5, 8))
 
-            # البحث عن صندوق إنشاء البوست
-            # فيسبوك يدعم Write something... أو اكتب شيئاً...
             post_triggers = [
                 "div[role='button']:has-text('اكتب شيئاً')",
                 "div[role='button']:has-text('Write something')",
@@ -197,7 +233,6 @@ def auto_post_mode():
                     break
 
             if not clicked:
-                # محاولة الضغط على منطقة الكتابة
                 feed_box = page.locator("div[role='region'] div[role='button']").first
                 if feed_box.is_visible():
                     feed_box.click()
@@ -205,13 +240,11 @@ def auto_post_mode():
 
             if clicked:
                 time.sleep(3)
-                # كتابة البوست
                 text_input = page.locator("div[role='dialog'] div[contenteditable='true']").first
                 if text_input.is_visible():
                     text_input.fill(POST_TEXT)
                     time.sleep(2)
 
-                    # رفع الصورة إن وجدت
                     if image_path:
                         try:
                             file_input = page.locator("input[type='file'][accept*='image']").first
@@ -221,40 +254,41 @@ def auto_post_mode():
                         except Exception:
                             pass
 
-                    # زر النشر (Post / نشر)
                     post_btn = page.locator("div[role='dialog'] div[role='button']:has-text('نشر'), div[role='dialog'] div[role='button']:has-text('Post')").first
                     if post_btn.is_visible():
                         post_btn.click()
                         success_count += 1
-                        print(f"  [✓] تم النشر بنجاح في الجروب!")
+                        print(f"  [OK] Posted successfully to group!")
                     else:
-                        print("  [!] لم يتم العثور على زر النشر.")
+                        print("  [!] Post button not found.")
             else:
-                print("  [ℹ] لم يتم فتح صندوق الكتابة (قد تحتاج للموافقة على الانضمام أولاً).")
+                print("  [!] Could not open post box (maybe needs group membership approval).")
 
-            # فاصل زمني آمن لتجنب حظر فيسبوك (من 3 إلى 5 دقائق)
             delay = random.randint(180, 300)
-            print(f"  [⏳] انتظار أمان لمدة {delay // 60} دقيقة و {delay % 60} ثانية قبل الجروب التالي...")
+            print(f"  [WAIT] Safe delay: sleeping {delay // 60}m {delay % 60}s before next group...")
             time.sleep(delay)
 
         except Exception as ex:
-            print(f"  [!] خطأ في الجروب: {ex}")
+            print(f"  [!] Error in group: {ex}")
 
-    context.close()
-    p.stop()
-    print(f"\n[✓] انتهت عملية النشر! تم النشر في {success_count} جروب بنجاح.")
+    try:
+        context.close()
+        p.stop()
+    except Exception:
+        pass
+    print(f"\n[OK] Posting finished! Successfully posted to {success_count} groups.")
 
 def main_menu():
     while True:
-        print("\n" + "="*50)
-        print("🚀 نظام أتمتة فيسبوك الشامل لمبيعات Orange DSL")
-        print("="*50)
-        print("1. تسجيل الدخول في فيسبوك لأول مرة (حفظ الجلسة)")
-        print("2. البحث التلقائي عن جروبات قرى ومراكز بني سويف وتجميعها")
-        print("3. بدء النشر التلقائي للبوست في كل الجروبات المجمعة")
-        print("4. خروج")
-        print("="*50)
-        choice = input("اختر رقم العملية (1-4): ").strip()
+        print("\n" + "="*55)
+        print("    ORANGE DSL - FACEBOOK AUTOMATION SYSTEM")
+        print("="*55)
+        print("  [1] Login to Facebook (تسجيل الدخول وحفظ الجلسة)")
+        print("  [2] Search Beni Suef Groups (البحث وتجميع جروبات القرى)")
+        print("  [3] Auto-Post to Groups (بدء النشر التلقائي)")
+        print("  [4] Exit (خروج)")
+        print("="*55)
+        choice = input("Select Option (1-4): ").strip()
         
         if choice == "1":
             login_mode()
@@ -263,10 +297,10 @@ def main_menu():
         elif choice == "3":
             auto_post_mode()
         elif choice == "4":
-            print("بالتوفيق يا كبير! مع السلامة 🫡")
+            print("\nGoodbye! بالتوفيق يا كبير 🫡\n")
             break
         else:
-            print("اختيار غير صحيح، جرب تاني.")
+            print("[!] Invalid option. Please enter 1, 2, 3, or 4.")
 
 if __name__ == "__main__":
     main_menu()
