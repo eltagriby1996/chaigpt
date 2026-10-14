@@ -292,6 +292,93 @@ def handle_photo(message):
     except Exception as e:
         bot.edit_message_text(f"❌ حصل خطأ في فحص الصورة: {str(e)}", message.chat.id, wait_msg.message_id)
 
+def launch_poster():
+    """تشغيل سكريبت النشر التلقائي في عملية مستقلة"""
+    workspace_dir = os.path.dirname(os.path.abspath(__file__))
+    stop_file = os.path.join(workspace_dir, "poster.stop")
+    if os.path.exists(stop_file):
+        try:
+            os.remove(stop_file)
+        except Exception:
+            pass
+
+    poster_script = os.path.join(workspace_dir, "fb_poster_rdp.py")
+    if os.path.exists(poster_script):
+        import subprocess
+        if sys.platform.startswith('win'):
+            subprocess.Popen([sys.executable, poster_script], cwd=workspace_dir, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+        else:
+            subprocess.Popen([sys.executable, poster_script], cwd=workspace_dir)
+        return True
+    return False
+
+@bot.message_handler(commands=['status'])
+def handle_status(message):
+    """عرض تقرير مفصل عن حالة النشر والجروبات"""
+    if not is_allowed(message.from_user.id):
+        return
+    workspace_dir = os.path.dirname(os.path.abspath(__file__))
+    groups_file = os.path.join(workspace_dir, "groups.txt")
+    posted_file = os.path.join(workspace_dir, "posted_groups.txt")
+
+    total_groups = 0
+    if os.path.exists(groups_file):
+        with open(groups_file, "r", encoding="utf-8") as f:
+            total_groups = len([l for l in f if l.strip().startswith("http")])
+
+    posted_groups = 0
+    if os.path.exists(posted_file):
+        with open(posted_file, "r", encoding="utf-8") as f:
+            posted_groups = len([l for l in f if l.strip() and not l.strip().startswith("#")])
+
+    remaining = max(0, total_groups - posted_groups)
+    status_text = (
+        f"📊 <b>تقرير حالة النشر التلقائي على الأرديبي:</b>\n\n"
+        f"🎯 <b>إجمالي الجروبات:</b> {total_groups} جروب\n"
+        f"✅ <b>تم النشر / المعالجة:</b> {posted_groups} جروب\n"
+        f"⏳ <b>المتبقي:</b> {remaining} جروب\n\n"
+        f"🤖 <b>أوامر التحكم السريع:</b>\n"
+        f"▶️ /start_poster - تشغيل النشر الآن\n"
+        f"⏹️ /stop_poster - إيقاف النشر مؤقتاً\n"
+        f"🔄 /update - سحب التحديثات وتحديث السيرفر\n"
+        f"ℹ️ /status - تحديث هذه الإحصائيات"
+    )
+    bot.reply_to(message, status_text, parse_mode="HTML")
+
+@bot.message_handler(commands=['start_poster'])
+def handle_start_poster(message):
+    if not is_allowed(message.from_user.id):
+        return
+    launched = launch_poster()
+    if launched:
+        bot.reply_to(message, "🚀 تم تشغيل سكريبت النشر التلقائي الذكي الآن في خلفية الأرديبي بنجاح!")
+    else:
+        bot.reply_to(message, "❌ تعذر العثور على سكريبت fb_poster_rdp.py.")
+
+@bot.message_handler(commands=['stop_poster'])
+def handle_stop_poster(message):
+    if not is_allowed(message.from_user.id):
+        return
+    workspace_dir = os.path.dirname(os.path.abspath(__file__))
+    stop_file = os.path.join(workspace_dir, "poster.stop")
+    with open(stop_file, "w", encoding="utf-8") as f:
+        f.write("STOP")
+    bot.reply_to(message, "🛑 تم إرسال إشارة الإيقاف لناشر الفيسبوك. سيتوقف بعد انتهاء العملية الحالية.")
+
+@bot.message_handler(commands=['update'])
+def handle_update(message):
+    if not is_allowed(message.from_user.id):
+        return
+    bot.reply_to(message, "🔄 جاري سحب أحدث كود من GitHub وتحديث السيرفر...")
+    try:
+        import subprocess
+        workspace_dir = os.path.dirname(os.path.abspath(__file__))
+        res = subprocess.run(["git", "pull", "origin", "main"], cwd=workspace_dir, capture_output=True, text=True)
+        bot.reply_to(message, f"✅ نتيجة التحديث:\n<code>{res.stdout or res.stderr}</code>", parse_mode="HTML")
+        launch_poster()
+    except Exception as e:
+        bot.reply_to(message, f"❌ خطأ أثناء التحديث: {e}")
+
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
     """استقبال ملف الكوكيز fb_cookies.json وتشغيل النشر التلقائي فوراً على الأرديبي"""
@@ -302,16 +389,12 @@ def handle_document(message):
         try:
             file_info = bot.get_file(message.document.file_id)
             doc_bytes = bot.download_file(file_info.file_path)
-            json.loads(doc_bytes.decode('utf-8')) # تحقق من سلامة الـ JSON
-            target_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fb_cookies.json")
-            with open(target_path, "wb") as f:
-                f.write(doc_bytes)
+            json_text = doc_bytes.decode('utf-8')
+            json.loads(json_text)
             
-            # تشغيل الناشر التلقائي فوراً
-            poster_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fb_poster_rdp.py")
-            if os.path.exists(poster_script):
-                import subprocess
-                subprocess.Popen(["python", poster_script])
+            import fb_cookies_manager
+            fb_cookies_manager.save_new_cookies(json_text)
+            launch_poster()
             
             bot.reply_to(message, "✅ <b>تم استلام ملف الكوكيز بنجاح!</b>\n🚀 تم إطلاق سكريبت النشر التلقائي في خلفية الأرديبي الآن 24/7، وستصلك إشعارات بكل جروب يتم النشر فيه.", parse_mode="HTML")
             return
@@ -331,13 +414,9 @@ def handle_text(message):
     # فحص إذا أرسل المستخدم كود كوكيز فيسبوك كنص
     if ("c_user" in text and "xs" in text) and (text.startswith("[") or text.startswith("{") or "facebook.com" in text):
         try:
-            target_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fb_cookies.json")
-            with open(target_path, "w", encoding="utf-8") as f:
-                f.write(text)
-            poster_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fb_poster_rdp.py")
-            if os.path.exists(poster_script):
-                import subprocess
-                subprocess.Popen(["python", poster_script])
+            import fb_cookies_manager
+            fb_cookies_manager.save_new_cookies(text)
+            launch_poster()
             bot.reply_to(message, "✅ <b>تم حفظ كوكيز فيسبوك بنجاح!</b>\n🚀 تم تشغيل سكريبت النشر التلقائي على الأرديبي في الخلفية، وستصلك رسائل بكل عملية نشر جديدة.", parse_mode="HTML")
             return
         except Exception as e:

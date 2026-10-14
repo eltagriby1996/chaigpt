@@ -6,8 +6,9 @@ import random
 import re
 import base64
 import requests
+from datetime import datetime
 
-# ترميز ويندوز
+# إجبار التوافق مع نصوص وترميز ويندوز لمنع أي كراش
 if sys.platform.startswith('win'):
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -15,14 +16,15 @@ if sys.platform.startswith('win'):
     except Exception:
         pass
 
-# ----------------- إعدادات التيليجرام للتنبيهات -----------------
-# التوكن مشفر لحمايته من فحص جيت هاب
+import fb_cookies_manager
+
+# ----------------- إعدادات التيليجرام للتنبيهات المباشرة -----------------
 _enc_token = "ODc5NTAyNjE5OTpBQUVvWTRjMGZPU0ViMXQya2RxMzZPOE9uRVdieENrSFF4RQ=="
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or base64.b64decode(_enc_token).decode("utf-8")
 ADMIN_ID = 7815806102
 
 def send_telegram_alert(message: str):
-    """إرسال تنبيه فوري إلى تيليجرام عند النشر في كل جروب"""
+    """إرسال تنبيه فوري إلى تيليجرام للأستاذ أحمد"""
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {
@@ -35,7 +37,7 @@ def send_telegram_alert(message: str):
     except Exception as e:
         print(f"[!] Telegram notify error: {e}")
 
-# ----------------- نص البوست المعتمد -----------------
+# ----------------- نص البوست المعتمد (النموذج الثاني) -----------------
 POST_TEXT = """وفّر نص فاتورتك الشهرية مع أقوى عروض الإنترنت المنزلي من Orange DSL 🍊🔥
 
 عرض التوفير الأكبر (سواء خط أرضي جديد أو تحويل من شركتك الحالية):
@@ -55,55 +57,10 @@ POST_TEXT = """وفّر نص فاتورتك الشهرية مع أقوى عرو�
 رابط واتساب مباشر: wa.me/201003061972"""
 
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
-COOKIES_FILE = os.path.join(WORKSPACE_DIR, "fb_cookies.json")
 GROUPS_FILE = os.path.join(WORKSPACE_DIR, "groups.txt")
 POSTED_FILE = os.path.join(WORKSPACE_DIR, "posted_groups.txt")
-
-def sanitize_cookies(cookies):
-    sanitized = []
-    for c in cookies:
-        if not isinstance(c, dict) or "name" not in c or "value" not in c:
-            continue
-        item = {
-            "name": str(c["name"]),
-            "value": str(c["value"]),
-            "domain": c.get("domain", ".facebook.com"),
-            "path": c.get("path", "/")
-        }
-        if "secure" in c:
-            item["secure"] = bool(c["secure"])
-        if "httpOnly" in c:
-            item["httpOnly"] = bool(c["httpOnly"])
-        if "sameSite" in c:
-            s = str(c["sameSite"]).lower()
-            if s == "strict":
-                item["sameSite"] = "Strict"
-            elif s == "lax":
-                item["sameSite"] = "Lax"
-            elif s in ["none", "no_restriction"]:
-                item["sameSite"] = "None"
-        sanitized.append(item)
-    return sanitized
-
-def load_cookies():
-    # 1. فحص وجود الملف المحلي
-    if os.path.exists(COOKIES_FILE):
-        try:
-            with open(COOKIES_FILE, "r", encoding="utf-8") as f:
-                return sanitize_cookies(json.load(f))
-        except Exception as e:
-            print(f"[!] Error reading {COOKIES_FILE}: {e}")
-    
-    # 2. فحص متغير البيئة من جيت هاب سيكرتس
-    env_c = os.getenv("FB_COOKIES")
-    if env_c:
-        try:
-            parsed = json.loads(env_c)
-            return sanitize_cookies(parsed)
-        except Exception as e:
-            print(f"[!] Error parsing FB_COOKIES env: {e}")
-            
-    return None
+OFFER_IMG = os.path.join(WORKSPACE_DIR, "offer.jpg")
+STOP_FILE = os.path.join(WORKSPACE_DIR, "poster.stop")
 
 def get_posted_groups():
     if os.path.exists(POSTED_FILE):
@@ -120,8 +77,9 @@ def sync_progress():
             import shutil
             if os.path.exists(POSTED_FILE):
                 shutil.copy2(POSTED_FILE, os.path.join(saved_work, "posted_groups.txt"))
-            if os.path.exists(COOKIES_FILE):
-                shutil.copy2(COOKIES_FILE, os.path.join(saved_work, "fb_cookies.json"))
+            cookies_file = os.path.join(WORKSPACE_DIR, "fb_cookies.json")
+            if os.path.exists(cookies_file):
+                shutil.copy2(cookies_file, os.path.join(saved_work, "fb_cookies.json"))
         except Exception:
             pass
 
@@ -150,11 +108,19 @@ def get_target_groups():
         return [l.strip() for l in f if l.strip().startswith("http")]
 
 def run_rdp_poster():
-    print("[*] Starting RDP Autonomous Facebook Poster with Auto-Resume...")
-    cookies = load_cookies()
+    # إزالة ملف الإيقاف عند البدء الجديد
+    if os.path.exists(STOP_FILE):
+        try:
+            os.remove(STOP_FILE)
+        except Exception:
+            pass
+
+    print("[*] Starting RDP Autonomous Facebook Poster with Smart-Publish Engine...")
+    
+    cookies = fb_cookies_manager.get_cookies()
     if not cookies:
-        print("[!] No Facebook cookies found in fb_cookies.json or FB_COOKIES env.")
-        send_telegram_alert("⚠️ <b>تنبيه من الأرديبي:</b> لم يتم العثور على كوكيز فيسبوك (fb_cookies.json). يرجى تزويدها لبدء النشر التلقائي.")
+        print("[!] No Facebook cookies available.")
+        send_telegram_alert("⚠️ <b>تنبيه من الأرديبي:</b> لم يتم العثور على كوكيز فيسبوك. يرجى تزويدها عبر الشات.")
         return
 
     all_groups = get_target_groups()
@@ -162,11 +128,11 @@ def run_rdp_poster():
     pending = [g for g in all_groups if g not in posted]
 
     startup_msg = (
-        f"🚀 <b>تم تشغيل سكريبت النشر التلقائي على الأرديبي!</b>\n\n"
+        f"🚀 <b>بدء تشغيل سكريبت النشر التلقائي الذكي على الأرديبي!</b>\n\n"
         f"📊 <b>إجمالي الجروبات:</b> {len(all_groups)} جروب\n"
         f"✅ <b>تم النشر سابقاً:</b> {len(posted)} جروب\n"
         f"🎯 <b>المتبقي للنشر:</b> {len(pending)} جروب\n\n"
-        f"🔄 <b>الاستمرارية:</b> سيبدأ النشر تلقائياً من الجروب رقم ({len(posted) + 1}) بدون أي تكرار!"
+        f"⚡ <b>الحالة:</b> السكريبت يبدأ العمل الفوري الآن وستصلك رسالة تأكيد بكل جروب!"
     )
     send_telegram_alert(startup_msg)
 
@@ -184,107 +150,169 @@ def run_rdp_poster():
     )
     context = browser.new_context(
         user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        viewport={"width": 1280, "height": 800}
+        viewport={"width": 1280, "height": 900},
+        locale="ar-EG"
     )
     context.add_cookies(cookies)
 
     page = context.new_page()
-    page.goto("https://www.facebook.com", wait_until="domcontentloaded")
+    page.goto("https://www.facebook.com", wait_until="domcontentloaded", timeout=45000)
     time.sleep(5)
 
     if "login" in page.url or "checkpoint" in page.url:
         print("[!] Cookies are invalid or expired.")
-        send_telegram_alert("❌ <b>فشل النشر:</b> الكوكيز المستخدمة منتهية أو تم تسجيل الخروج. يرجى تجديد الكوكيز.")
+        send_telegram_alert("❌ <b>فشل النشر:</b> الكوكيز المستخدمة منتهية أو تم تسجيل الخروج. يرجى إرسال كوكيز جديدة.")
         browser.close()
         p.stop()
         return
 
     print("[+] Login confirmed on Facebook!")
+    send_telegram_alert("✅ <b>تم تسجيل الدخول لفيسبوك بنجاح!</b> جاري بدء النشر في الجروبات الآن...")
     
     total_posted_session = 0
 
     while True:
+        if os.path.exists(STOP_FILE):
+            print("[*] Stop signal detected. Exiting poster.")
+            send_telegram_alert("🛑 تم إيقاف سكريبت النشر التلقائي بناءً على طلبك.")
+            break
+
         all_groups = get_target_groups()
         posted = get_posted_groups()
         pending = [g for g in all_groups if g not in posted]
 
         if not pending:
-            print("[*] All groups have been posted to. Sleeping for 2 hours before recycling...")
+            print("[*] All groups have been processed! Recycling in 2 hours...")
+            send_telegram_alert("🎉 <b>تم المرور على جميع الجروبات (1330 جروب) بنجاح!</b> سيبدأ السكريبت دورة جديدة بعد ساعتين.")
             time.sleep(7200)
             continue
 
         for group_url in pending:
-            print(f"\n[*] Processing group: {group_url}")
+            if os.path.exists(STOP_FILE):
+                break
+
+            print(f"\n[*] Navigating to: {group_url}")
             try:
                 page.goto(group_url, wait_until="domcontentloaded", timeout=45000)
-                time.sleep(random.uniform(5, 8))
+                time.sleep(random.uniform(4, 6))
 
-                post_triggers = [
-                    "div[role='button']:has-text('اكتب شيئاً')",
-                    "div[role='button']:has-text('Write something')",
-                    "div[role='button']:has-text('إنشاء منشور عام')",
-                    "div[role='button']:has-text('Create a public post')"
-                ]
-                clicked = False
-                for trig in post_triggers:
-                    loc = page.locator(trig).first
-                    if loc.is_visible():
-                        loc.click()
-                        clicked = True
-                        break
-
-                if not clicked:
-                    feed_box = page.locator("div[role='region'] div[role='button']").first
-                    if feed_box.is_visible():
-                        feed_box.click()
-                        clicked = True
-
-                if clicked:
+                # 1. فحص زر الانضمام للجروب إذا لم نكن أعضاء
+                join_res = page.evaluate("""() => {
+                    const btns = Array.from(document.querySelectorAll("div[role='button']"));
+                    const joinBtn = btns.find(b => {
+                        const t = (b.textContent || '').trim();
+                        const aria = (b.getAttribute('aria-label') || '').trim();
+                        return (t === 'انضمام' || t === 'Join' || t.includes('انضمام إلى المجموعة') || aria === 'انضمام') && b.offsetParent !== null;
+                    });
+                    if (joinBtn) {
+                        joinBtn.click();
+                        return true;
+                    }
+                    return false;
+                }""")
+                if join_res:
+                    print(f"[+] Clicked Join button on {group_url}")
                     time.sleep(3)
-                    text_input = page.locator("div[role='dialog'] div[contenteditable='true']").first
-                    if text_input.is_visible():
-                        text_input.fill(POST_TEXT)
-                        time.sleep(2)
 
-                        # رفع صورة العرض إذا كانت متوفرة
-                        offer_img = os.path.join(WORKSPACE_DIR, "offer.jpg")
-                        if os.path.exists(offer_img):
-                            try:
-                                file_input = page.locator("input[type='file'][accept*='image']").first
-                                if file_input.is_attached():
-                                    file_input.set_input_files(offer_img)
-                                    time.sleep(4)
-                            except Exception as img_err:
-                                print(f"[!] Warning attaching image: {img_err}")
+                # 2. النقر على صندوق كتابة المنشور داخل الفيد
+                box_clicked = page.evaluate("""() => {
+                    const feed = document.querySelector("div[role='feed'], div[role='main']") || document;
+                    const btns = Array.from(feed.querySelectorAll("div[role='button']"));
+                    for (let b of btns) {
+                        const txt = (b.textContent || '').trim();
+                        const aria = (b.getAttribute('aria-label') || '').trim();
+                        if (txt.includes('اكتب') || txt.includes('Write') || aria.includes('إنشاء منشور') || aria.includes('Create a public post')) {
+                            b.scrollIntoView({ behavior: 'instant', block: 'center' });
+                            b.click();
+                            return true;
+                        }
+                    }
+                    return false;
+                }""")
 
-                        post_btn = page.locator("div[role='dialog'] div[role='button']:has-text('نشر'), div[role='dialog'] div[role='button']:has-text('Post')").first
-                        if post_btn.is_visible():
-                            post_btn.click()
-                            time.sleep(5)
-                            mark_posted(group_url)
-                            total_posted_session += 1
-                            print(f"[+] Successfully posted to {group_url}")
-
-                            alert_msg = (
-                                f"📢 <b>[نشر تلقائي ناجح من الأرديبي]</b>\n\n"
-                                f"✅ <b>تم النشر في الجروب:</b>\n{group_url}\n\n"
-                                f"📊 <b>إجمالي المنشورات بالجلسة:</b> {total_posted_session} منشور\n"
-                                f"🕒 <b>التوقيت:</b> {time.strftime('%Y-%m-%d %I:%M:%S %p')}"
-                            )
-                            send_telegram_alert(alert_msg)
-                        else:
-                            print("[!] Post button not found.")
-                else:
-                    print("[!] Post box not accessible (approval needed or restricted). Skipping.")
+                if not box_clicked:
+                    print("[!] Post box not accessible (pending admin approval or restricted). Moving next.")
                     mark_posted(group_url)
+                    # فاصل زمني قصير 15 ثانية للجروبات المغلقة
+                    time.sleep(15)
+                    continue
+
+                # 3. صندوق المنشور فُتح بنجاح: الانتظار والكتابة
+                time.sleep(3)
+                typed = page.evaluate("""(text) => {
+                    const editors = Array.from(document.querySelectorAll("div[role='textbox'], div[contenteditable='true']"));
+                    const postEditor = editors.find(el => {
+                        const aria = el.getAttribute('aria-label') || '';
+                        return el.offsetParent !== null && !aria.includes('تعليق') && !aria.includes('Comment');
+                    });
+                    if (!postEditor) return false;
+                    postEditor.focus();
+                    document.execCommand('insertText', false, text);
+                    return true;
+                }""", POST_TEXT)
+
+                if not typed:
+                    print("[!] Failed to focus post editor. Skipping.")
+                    mark_posted(group_url)
+                    time.sleep(15)
+                    continue
+
+                time.sleep(2)
+
+                # 4. رفع صورة العرض المعتمدة
+                if os.path.exists(OFFER_IMG):
+                    try:
+                        file_inputs = page.locator("input[type='file'][accept*='image']").all()
+                        for fi in file_inputs:
+                            fi.set_input_files(OFFER_IMG)
+                            time.sleep(4)
+                            break
+                    except Exception as img_err:
+                        print(f"[!] Warning uploading image: {img_err}")
+
+                # 5. النقر على زر النشر
+                published = page.evaluate("""() => {
+                    const btns = Array.from(document.querySelectorAll("div[role='button']"));
+                    const postBtn = btns.find(b => {
+                        const txt = (b.textContent || '').trim();
+                        const aria = (b.getAttribute('aria-label') || '').trim();
+                        return (txt === 'نشر' || txt === 'Post' || aria === 'نشر' || aria === 'Post') && b.offsetParent !== null;
+                    });
+                    if (postBtn) {
+                        postBtn.click();
+                        return true;
+                    }
+                    return false;
+                }""")
+
+                if published:
+                    time.sleep(8)
+                    mark_posted(group_url)
+                    total_posted_session += 1
+                    print(f"[+] Successfully posted to: {group_url}")
+
+                    cooldown_sec = random.randint(240, 360) # 4 إلى 6 دقائق أمان
+                    cooldown_min = cooldown_sec // 60
+
+                    success_msg = (
+                        f"📢 <b>[نشر تلقائي ناجح من الأرديبي] 🍊🔥</b>\n\n"
+                        f"✅ <b>تم النشر في الجروب:</b>\n{group_url}\n\n"
+                        f"📊 <b>إجمالي منشورات الجلسة:</b> {total_posted_session} منشور\n"
+                        f"🕒 <b>التوقيت:</b> {datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')}\n"
+                        f"⏳ <b>المنشور القادم خلال:</b> {cooldown_min} دقائق (لحماية حسابك من الحظر)"
+                    )
+                    send_telegram_alert(success_msg)
+
+                    print(f"[*] Sleeping {cooldown_min} minutes for safety...")
+                    time.sleep(cooldown_sec)
+                else:
+                    print("[!] Publish button could not be clicked.")
+                    mark_posted(group_url)
+                    time.sleep(15)
 
             except Exception as e:
                 print(f"[!] Error in {group_url}: {e}")
-
-            # فاصل أمان عشوائي بين 4 إلى 7 دقائق لحماية الحساب من الحظر
-            safe_sleep = random.randint(240, 420)
-            print(f"[*] Safe cooldown: sleeping {safe_sleep // 60}m {safe_sleep % 60}s before next group...")
-            time.sleep(safe_sleep)
+                time.sleep(15)
 
     try:
         browser.close()

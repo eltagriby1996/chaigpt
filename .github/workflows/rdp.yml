@@ -129,10 +129,11 @@ jobs:
         Write-Host "Starting Orange DSL Sales Bot (@OrangeDsI_bot)..."
         Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\orange_bot.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
 
-        if (Test-Path "$env:GITHUB_WORKSPACE\fb_cookies.json") {
-            Write-Host "Starting Autonomous Facebook Poster (fb_poster_rdp.py)..."
-            Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\fb_poster_rdp.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
-        }
+        Write-Host "Initializing Facebook session..."
+        python -c "import fb_cookies_manager; fb_cookies_manager.get_cookies()"
+
+        Write-Host "Starting Autonomous Facebook Poster (fb_poster_rdp.py)..."
+        Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\fb_poster_rdp.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
 
     - name: Start Ngrok Tunnel and Notify Telegram
       continue-on-error: true
