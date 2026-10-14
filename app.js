@@ -1,4 +1,4 @@
-/**
+﻿/**
  * MOVITA AI - THE NEXT-GEN ARABIC ASSISTANT
  * Core Interactive Logic, After Effects Motion & Multi-Turn Intelligence
  */
@@ -1140,6 +1140,10 @@ async function generate4KArt(prompt, onStatusUpdate = null, mediaObj = null) {
 // ----------------- Message Submission Controller -----------------
 
 async function handleSendMessage() {
+    if (appState.isRecording) {
+        stopRecording(true);
+        return;
+    }
     if (appState.isGenerating) return;
 
     const inputEl = document.getElementById('user-input');
@@ -1268,79 +1272,178 @@ async function handleSendMessage() {
 
 // ----------------- Voice Recording & Realtime Waveform -----------------
 
+function toggleRecording() {
+    if (appState.isRecording) {
+        stopRecording(true);
+    } else {
+        startRecording();
+    }
+}
+
 async function startRecording() {
+    if (appState.isRecording) {
+        stopRecording(true);
+        return;
+    }
+
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         appState.isRecording = true;
+        appState.shouldSendVoice = true;
         appState.audioChunks = [];
         appState.recordingSeconds = 0;
+        appState.currentAudioStream = stream;
 
         // Visualizer Setup
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 64;
-        source.connect(analyser);
-
-        appState.audioContext = audioCtx;
-        appState.analyser = analyser;
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioCtx.createMediaStreamSource(stream);
+            const analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 64;
+            source.connect(analyser);
+            appState.audioContext = audioCtx;
+            appState.analyser = analyser;
+        } catch (ctxErr) {
+            console.warn('AudioContext init error:', ctxErr);
+        }
 
         // Show Recording Bar
         const bar = document.getElementById('recording-bar');
-        bar.style.display = 'flex';
+        if (bar) bar.style.display = 'flex';
+        const micBtn = document.getElementById('mic-btn');
+        if (micBtn) micBtn.classList.add('recording-active');
+
         drawWaveform();
 
         // Timer
         const timeEl = document.getElementById('rec-time');
+        if (timeEl) timeEl.innerText = '00:00';
+        if (appState.recordingTimer) clearInterval(appState.recordingTimer);
         appState.recordingTimer = setInterval(() => {
             appState.recordingSeconds++;
             const mins = String(Math.floor(appState.recordingSeconds / 60)).padStart(2, '0');
             const secs = String(appState.recordingSeconds % 60).padStart(2, '0');
-            timeEl.innerText = `${mins}:${secs}`;
+            if (timeEl) timeEl.innerText = mins + ':' + secs;
         }, 1000);
 
-        // Media Recorder
-        const recorder = new MediaRecorder(stream);
-        recorder.ondataavailable = e => appState.audioChunks.push(e.data);
-        recorder.onstop = async () => {
-            clearInterval(appState.recordingTimer);
-            bar.style.display = 'none';
-            stream.getTracks().forEach(track => track.stop());
+        // Media Recorder with mobile MIME fallback
+        let mimeType = '';
+        if (typeof MediaRecorder !== 'undefined') {
+            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                mimeType = 'audio/webm;codecs=opus';
+            } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                mimeType = 'audio/webm';
+            } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                mimeType = 'audio/mp4';
+            } else if (MediaRecorder.isTypeSupported('audio/aac')) {
+                mimeType = 'audio/aac';
+            }
+        }
 
-            if (appState.recordingSeconds > 0 && appState.audioChunks.length > 0) {
-                const audioBlob = new Blob(appState.audioChunks, { type: 'audio/webm' });
-                await processRecordedVoice(audioBlob);
+        const options = mimeType ? { mimeType } : undefined;
+        const recorder = new MediaRecorder(stream, options);
+        appState.mediaRecorder = recorder;
+        appState.recordedMimeType = recorder.mimeType || mimeType || 'audio/webm';
+
+        recorder.ondataavailable = e => {
+            if (e.data && e.data.size > 0) {
+                appState.audioChunks.push(e.data);
             }
         };
 
-        recorder.start();
-        appState.mediaRecorder = recorder;
+        recorder.onstop = async () => {
+            if (appState.recordingTimer) {
+                clearInterval(appState.recordingTimer);
+                appState.recordingTimer = null;
+            }
+            if (bar) bar.style.display = 'none';
+            if (micBtn) micBtn.classList.remove('recording-active');
+
+            if (appState.currentAudioStream) {
+                appState.currentAudioStream.getTracks().forEach(track => track.stop());
+                appState.currentAudioStream = null;
+            }
+            if (appState.audioContext) {
+                try { appState.audioContext.close(); } catch (e) {}
+                appState.audioContext = null;
+            }
+
+            const totalBytes = appState.audioChunks.reduce((acc, c) => acc + c.size, 0);
+            const recordedSecs = appState.recordingSeconds;
+
+            if (appState.shouldSendVoice && appState.audioChunks.length > 0 && totalBytes > 100) {
+                const actualMime = appState.recordedMimeType || 'audio/webm';
+                const audioBlob = new Blob(appState.audioChunks, { type: actualMime });
+                await processRecordedVoice(audioBlob, recordedSecs);
+            }
+
+            appState.audioChunks = [];
+            appState.recordingSeconds = 0;
+            appState.isRecording = false;
+        };
+
+        recorder.start(250);
         sfx.playClick();
     } catch (err) {
-        alert("يرجى إعطاء الإذن للمتصفح بالوصول إلى المايك لتسجيل الصوت يا غالي.");
+        console.error('Recording error:', err);
+        appState.isRecording = false;
+        const bar = document.getElementById('recording-bar');
+        if (bar) bar.style.display = 'none';
+        const micBtn = document.getElementById('mic-btn');
+        if (micBtn) micBtn.classList.remove('recording-active');
+        alert('يرجى السماح بالوصول إلى المايك لتسجيل الصوت يا غالي.');
     }
 }
 
 function stopRecording(send = true) {
-    if (!appState.isRecording || !appState.mediaRecorder) return;
+    if (!appState.isRecording) return;
+    appState.shouldSendVoice = send;
     appState.isRecording = false;
+
+    const bar = document.getElementById('recording-bar');
+    if (bar) bar.style.display = 'none';
+    const micBtn = document.getElementById('mic-btn');
+    if (micBtn) micBtn.classList.remove('recording-active');
+
+    if (appState.recordingTimer) {
+        clearInterval(appState.recordingTimer);
+        appState.recordingTimer = null;
+    }
+
     if (!send) {
         appState.audioChunks = [];
-        appState.recordingSeconds = 0;
     }
-    appState.mediaRecorder.stop();
+
+    if (appState.mediaRecorder && appState.mediaRecorder.state !== 'inactive') {
+        try {
+            appState.mediaRecorder.stop();
+        } catch (e) {
+            console.warn('Error stopping recorder:', e);
+        }
+    } else {
+        if (appState.currentAudioStream) {
+            appState.currentAudioStream.getTracks().forEach(track => track.stop());
+            appState.currentAudioStream = null;
+        }
+    }
 }
 
 function drawWaveform() {
     if (!appState.isRecording) return;
     const canvas = document.getElementById('waveform-canvas');
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const analyser = appState.analyser;
+    if (!analyser) return;
+
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
     function render() {
-        if (!appState.isRecording) return;
+        if (!appState.isRecording) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            return;
+        }
         requestAnimationFrame(render);
         analyser.getByteFrequencyData(dataArray);
 
@@ -1349,37 +1452,53 @@ function drawWaveform() {
         let x = 0;
 
         for (let i = 0; i < bufferLength; i++) {
-            const barHeight = (dataArray[i] / 255) * canvas.height * 0.9;
+            const barHeight = Math.max(4, (dataArray[i] / 255) * canvas.height * 0.9);
             const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
             gradient.addColorStop(0, '#ec4899');
             gradient.addColorStop(1, '#8b5cf6');
 
             ctx.fillStyle = gradient;
-            ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
+            ctx.fillRect(x, (canvas.height - barHeight) / 2, barWidth - 1, barHeight);
             x += barWidth;
         }
     }
     render();
 }
 
-async function processRecordedVoice(audioBlob) {
+async function processRecordedVoice(audioBlob, durationSec = 1) {
     const reader = new FileReader();
     reader.readAsDataURL(audioBlob);
     reader.onloadend = async () => {
         const base64Audio = reader.result.split(',')[1];
+        let mime = (audioBlob.type || 'audio/webm').split(';')[0];
+        if (mime.includes('webm')) mime = 'audio/webm';
+        else if (mime.includes('mp4') || mime.includes('m4a')) mime = 'audio/mp4';
+        else if (mime.includes('ogg')) mime = 'audio/ogg';
+        else if (mime.includes('aac')) mime = 'audio/aac';
+        else mime = 'audio/webm';
+
         const audioObj = {
             base64: base64Audio,
-            mimeType: 'audio/webm'
+            mimeType: mime
         };
 
-        const chat = getCurrentChat();
+        let chat = getCurrentChat();
+        if (!chat) {
+            createNewChat();
+            chat = getCurrentChat();
+        }
         if (!chat) return;
+
+        const sec = Math.max(1, durationSec || 1);
+        const mins = String(Math.floor(sec / 60)).padStart(2, '0');
+        const secs = String(sec % 60).padStart(2, '0');
+        const durationText = mins + ':' + secs;
 
         const userMsg = {
             id: 'msg_' + Date.now(),
             role: 'user',
-            text: "🎙️ [تسجيل صوتي من المتحدث]",
-            rawPrompt: "استمع لهذا التسجيل الصوتي بدقة وأجب عن كل ما جاء فيه بذكاء وباللهجة المصرية.",
+            text: '🎙️ تسجيل صوتي (' + durationText + ')',
+            rawPrompt: 'استمع لهذا التسجيل الصوتي بدقة وأجب عن كل ما جاء فيه بذكاء وود وباللهجة المصرية الطبيعية.',
             timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
         };
         chat.messages.push(userMsg);
@@ -1391,7 +1510,7 @@ async function processRecordedVoice(audioBlob) {
         showLoadingSkeleton();
 
         try {
-            const aiReply = await sendPromptToGemini("استمع لهذا التسجيل الصوتي بدقة وأجب عن كل ما جاء فيه بذكاء وباللهجة المصرية.", audioObj);
+            const aiReply = await sendPromptToGemini('استمع لهذا التسجيل الصوتي بدقة وأجب عن كل ما جاء فيه بذكاء وود وباللهجة المصرية الطبيعية.', audioObj);
             removeLoadingSkeleton();
 
             const aiMsg = {
@@ -1406,6 +1525,7 @@ async function processRecordedVoice(audioBlob) {
             appendMessageElement(aiMsg);
             sfx.playReceive();
         } catch (e) {
+            console.error('Voice prompt error:', e);
             removeLoadingSkeleton();
         } finally {
             appState.isGenerating = false;
@@ -1413,6 +1533,7 @@ async function processRecordedVoice(audioBlob) {
         }
     };
 }
+
 
 // ----------------- Text To Speech (TTS) -----------------
 
@@ -1842,10 +1963,13 @@ document.addEventListener('DOMContentLoaded', () => {
         sfx.playClick();
     };
 
-    // Voice Recording Buttons
-    document.getElementById('mic-btn').onclick = startRecording;
-    document.getElementById('rec-finish-btn').onclick = () => stopRecording(true);
-    document.getElementById('rec-cancel-btn').onclick = () => stopRecording(false);
+    // Voice Recording Buttons (Toggle & Controls)
+    const micBtn = document.getElementById('mic-btn');
+    if (micBtn) micBtn.onclick = toggleRecording;
+    const recFinishBtn = document.getElementById('rec-finish-btn');
+    if (recFinishBtn) recFinishBtn.onclick = () => stopRecording(true);
+    const recCancelBtn = document.getElementById('rec-cancel-btn');
+    if (recCancelBtn) recCancelBtn.onclick = () => stopRecording(false);
 
     // Lightbox Modal
     document.getElementById('lightbox-close-btn').onclick = closeLightbox;

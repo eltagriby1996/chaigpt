@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Outfit:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=20.0">
+    <link rel="stylesheet" href="style.css?v=21.0">
 </head>
 <body>
     <!-- Canvas for After Effects Ambient Particles and Aurora -->
@@ -141,18 +141,24 @@
 
             </div>
 
-            <!-- Voice Recording Live Visualizer Overlay -->
+                        <!-- Voice Recording Live Visualizer Overlay -->
             <div class="recording-bar" id="recording-bar">
-                <div class="rec-pulse-dot"></div>
-                <span class="rec-time" id="rec-time">00:00</span>
-                <canvas id="waveform-canvas" width="220" height="40"></canvas>
-                <span class="rec-status-text">جاري الاستماع لصوتك يا غالي...</span>
-                <button class="rec-cancel-btn" id="rec-cancel-btn" title="إلغاء">
-                    <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-                <button class="rec-finish-btn" id="rec-finish-btn" title="إرسال الفويس">
-                    <svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                </button>
+                <div class="rec-info-group">
+                    <div class="rec-pulse-dot"></div>
+                    <span class="rec-time" id="rec-time">00:00</span>
+                </div>
+                <div class="rec-wave-group">
+                    <canvas id="waveform-canvas" width="160" height="36"></canvas>
+                </div>
+                <span class="rec-status-text">جاري التسجيل... اضغط ✔ للإرسال أو ✖ للإلغاء</span>
+                <div class="rec-actions-group">
+                    <button class="rec-cancel-btn" id="rec-cancel-btn" type="button" title="إلغاء التسجيل">
+                        <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                    <button class="rec-finish-btn" id="rec-finish-btn" type="button" title="إرسال الصوت">
+                        <svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </button>
+                </div>
             </div>
 
             <!-- Bottom Input Command Center -->
@@ -288,6 +294,6 @@
     <audio id="tts-audio" style="display: none;"></audio>
 
     <!-- Custom Script -->
-    <script src="app.js?v=20.0"></script>
+    <script src="app.js?v=21.0"></script>
 </body>
 </html>
