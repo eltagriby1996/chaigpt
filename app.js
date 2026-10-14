@@ -883,8 +883,7 @@ function getPersonaInstruction() {
         "   - في التحيات والدردشة البسيطة (مثل: 'ايه الدنيا'، 'عامل ايه'، 'حد مزعلك'، 'صباح الخير'): رد بتلقائية في سطر أو سطرين بطريقة ودودة دافئة بدون عناوين ولا نقاط ولا حشو نهائياً.\n" +
         "   - استخدم العناوين (###) والنقاط فقط وفقط في الإجابات الطويلة، المقارنات، الأكواد، والمعلومات التقنية التي تحتاج ترتيباً مريحاً للعين.\n" +
         "3. الذكاء السياقي: تذكر سياق المحادثة ضمناً وبدقة، وإياك إطلاقاً أن تلخص ما دار أو تذكر عبارات مثل 'ملخص محادثتنا' أو 'أنا معنديش زعل لأني ذكاء' أو 'مفيش مواضيع قديمة' إلا إذا سألك المستخدم صراحة: 'لخص اللي فات' أو 'كنا بنقول إيه'.\n" +
-        "4. التوضيح البصري (صور توضيحية ذكية مثل شات جي بي تي): إذا سأل المستخدم عن مكان، معلم سياحي، مدينة، سيارة، وصفة أكل، حيوان، اختراع، شخصية، أو أي موضوع يستدعي التوضيح البصري (أو طلب صور صراحة)، قم بتضمين صورة واحدة توضيحية عالية الجودة في منتصف الرد بشكل منظم ومريح للعين باستخدام صيغة المارك داون:\n" +
-        "![وصف مختصر للصورة بالعربي](https://image.pollinations.ai/prompt/English_Visual_Query_Here?width=800&height=450&nologo=true)\n" +
+        "4. الردود النصية المباشرة: لا تضع أي صور أو روابط صور في ردودك إطلاقاً. ركز على الإجابة والمعلومات والأكواد فقط.\n" +
         "5. البرمجة والأكواد: كود نظيف واحترافي مباشرة مع شرح سطري موجز جداً.\n" +
         "6. اللغة: تحدث بالمصري الطبيعي دائماً، ولا تتحدث بالإنجليزية إلا إذا طُلب منك صراحة الترجمة للإنجليزية."
     );
@@ -1534,24 +1533,7 @@ function formatMarkdown(text) {
         return placeholder;
     });
 
-    // Extract embedded images before HTML escaping (ChatGPT & Perplexity style)
-    const embeddedImages = [];
-    processed = processed.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s\)]+)\)/g, (match, alt, url) => {
-        const placeholder = `__EMBEDDED_IMG_${embeddedImages.length}__`;
-        const cleanAlt = alt ? alt.trim() : 'صورة توضيحية';
-        embeddedImages.push(`
-            <div class="embedded-chat-image">
-                <img src="${url}" alt="${cleanAlt}" loading="lazy" onclick="openLightbox('${url}')" onerror="this.parentElement.style.display='none'">
-                <div class="embedded-image-caption">
-                    <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                    <span>${cleanAlt}</span>
-                </div>
-            </div>
-        `);
-        return placeholder;
-    });
-
-    // Escape basic HTML outside code blocks and image placeholders
+    // Escape basic HTML outside code blocks
     processed = escapeHtml(processed);
 
     // Headers
@@ -1592,7 +1574,7 @@ function formatMarkdown(text) {
             if (inOl) { result.push('</ol>'); inOl = false; }
 
             if (trimmed.length > 0) {
-                if (trimmed.startsWith('<h') || trimmed.startsWith('__CODE_BLOCK_') || trimmed.startsWith('__EMBEDDED_IMG_')) {
+                if (trimmed.startsWith('<h') || trimmed.startsWith('__CODE_BLOCK_')) {
                     result.push(trimmed);
                 } else {
                     result.push(`<p>${trimmed}</p>`);
@@ -1609,11 +1591,6 @@ function formatMarkdown(text) {
     // Restore code blocks
     for (let i = 0; i < codeBlocks.length; i++) {
         finalHtml = finalHtml.replace(`__CODE_BLOCK_${i}__`, codeBlocks[i]);
-    }
-
-    // Restore embedded images
-    for (let i = 0; i < embeddedImages.length; i++) {
-        finalHtml = finalHtml.replace(`__EMBEDDED_IMG_${i}__`, embeddedImages[i]);
     }
 
     return finalHtml;
