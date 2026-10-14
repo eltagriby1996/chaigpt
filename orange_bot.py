@@ -240,12 +240,12 @@ def handle_callbacks(call):
     elif data.startswith("pkg_"):
         pkg_name = data.replace("pkg_", "") + " جيجا"
         CUSTOMER_STATES[chat_id] = {
-            'step': 'name',
+            'step': 'landline',
             'data': {'package': f"باقة {pkg_name}"}
         }
         ask_text = (
             f"🎯 ممتاز! تم اختيار *باقة {pkg_name}* بالخصم 50% والشهر المجاني.\n\n"
-            "📝 من فضلك اكتب **اسم حضرتك بالكامل (ثلاثي)**:"
+            "☎️ من فضلك اكتب **رقم التليفون الأرضي** (مع كود المحافظة، مثلاً 02 أو 03 أو 013...):"
         )
         bot.send_message(chat_id, ask_text, parse_mode="Markdown")
 
@@ -265,23 +265,107 @@ def handle_callbacks(call):
         order_text = "🚀 *بدء طلب التعاقد والتحويل إلى Orange DSL*\n\nاختر الباقة التي تناسبك أولاً:"
         bot.send_message(chat_id, order_text, parse_mode="Markdown", reply_markup=build_packages_markup())
 
-    elif data.startswith("type_"):
-        type_mapping = {
-            "type_we": "تحويل من وي (WE)",
-            "type_voda": "تحويل من فودافون",
-            "type_etisalat": "تحويل من اتصالات",
-            "type_new": "تعاقد خط أرضي جديد"
-        }
-        chosen_type = type_mapping.get(data, "تحويل")
+    elif data == "skip_id_photo":
         if chat_id in CUSTOMER_STATES:
-            CUSTOMER_STATES[chat_id]['data']['type'] = chosen_type
-            CUSTOMER_STATES[chat_id]['step'] = 'address'
-            bot.send_message(chat_id, "📍 ممتاز، خطوة أخيرة: **اكتب العنوان والمنطقة بالتفصيل** (المحافظة - المنطقة - اسم الشارع):")
+            state = CUSTOMER_STATES[chat_id]
+            state['data']['id_front'] = "سيتم الإرسال عبر الواتساب"
+            state['data']['id_back'] = "سيتم الإرسال عبر الواتساب"
+            complete_order(chat_id, state['data'])
 
     elif data == "cancel_order":
         if chat_id in CUSTOMER_STATES:
             del CUSTOMER_STATES[chat_id]
         bot.send_message(chat_id, "تم إلغاء الطلب بنجاح. تقدر تطلب في أي وقت!", reply_markup=build_main_markup())
+
+# ----------------- إتمام وحفظ الطلب وإشعار الأدمن -----------------
+
+def complete_order(chat_id: int, lead_data: dict):
+    if chat_id in CUSTOMER_STATES:
+        del CUSTOMER_STATES[chat_id]
+
+    lead_data['date'] = datetime.now().strftime('%Y-%m-%d %I:%M %p')
+    save_lead(lead_data)
+
+    # تأكيد للعميل
+    confirm_markup = types.InlineKeyboardMarkup()
+    confirm_markup.add(
+        types.InlineKeyboardButton("💬 مراسلة المندوب واتساب فوراً", url=f"https://wa.me/2{WHATSAPP_NUMBER}?text=أهلاً،%20أنا%20سجلت%20طلب%20تعاقد%20على%20البوت%20وحابب%20أأكد%20الطلب"),
+        types.InlineKeyboardButton("🏠 الصفحة الرئيسية", callback_data="menu_home")
+    )
+    bot.send_message(
+        chat_id,
+        "🎉 *ألف مبروك يا فندم! تم استلام طلبك وبياناتك بنجاح.* 🥳\n\n"
+        "مندوب أورنج المعتمد هيتواصل مع حضرتك هاتفياً أو عبر الواتساب لتأكيد موعد استلام الراوتر وتشغيل الخدمة.\n"
+        "لو حابب تتواصل فوراً مع المندوب اضغط على الزر تحت 👇",
+        parse_mode="Markdown",
+        reply_markup=confirm_markup
+    )
+
+    # إشعار فوري للأدمن (أحمد) على التليجرام
+    try:
+        raw_mob = lead_data.get('mobile', '')
+        clean_mob = raw_mob.replace(' ', '').replace('+', '').lstrip('0')
+        admin_alert = (
+            f"🚨 <b>طلب تعاقد جديد - عميل Orange DSL!</b> 🚀\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 <b>الباقة:</b> {lead_data.get('package')}\n"
+            f"☎️ <b>رقم الأرضي:</b> <code>{lead_data.get('landline')}</code>\n"
+            f"📱 <b>رقم الموبايل:</b> <code>{lead_data.get('mobile')}</code>\n"
+            f"⏰ <b>التاريخ:</b> {lead_data.get('date')}\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"📲 <a href='https://wa.me/20{clean_mob}'>اضغط هنا لمراسلة العميل واتساب فوراً</a>"
+        )
+        bot.send_message(ADMIN_ID, admin_alert, parse_mode="HTML")
+
+        # إرسال صور البطاقة للأدمن إن وُجدت
+        id_front = lead_data.get('id_front_file_id')
+        id_back = lead_data.get('id_back_file_id')
+        if id_front:
+            bot.send_photo(ADMIN_ID, id_front, caption=f"📸 وش البطاقة - أرضي: {lead_data.get('landline')} | {lead_data.get('package')}")
+        if id_back:
+            bot.send_photo(ADMIN_ID, id_back, caption=f"📸 ضهر البطاقة - موبايل: {lead_data.get('mobile')}")
+    except Exception as ex:
+        print(f"Error alerting admin: {ex}")
+
+# ----------------- استقبال الصور (وش وضهر البطاقة) -----------------
+
+@bot.message_handler(content_types=['photo', 'document'])
+def handle_photos_and_docs(message):
+    chat_id = message.chat.id
+    if chat_id in CUSTOMER_STATES:
+        state = CUSTOMER_STATES[chat_id]
+        step = state.get('step')
+
+        # استخراج file_id
+        file_id = None
+        if message.photo:
+            file_id = message.photo[-1].file_id
+        elif message.document:
+            file_id = message.document.file_id
+
+        if not file_id:
+            bot.reply_to(message, "يرجى إرسال صورة واضحة يا فندم.")
+            return
+
+        if step == 'id_front':
+            state['data']['id_front_file_id'] = file_id
+            state['step'] = 'id_back'
+            skip_markup = types.InlineKeyboardMarkup()
+            skip_markup.add(types.InlineKeyboardButton("📲 سأرسل الضهر عبر الواتساب", callback_data="skip_id_photo"))
+            bot.send_message(
+                chat_id,
+                "📸 تسلم يا فندم! دلوقتي ابعت **صورة البطاقة (الوجه الخلفي / ضهر البطاقة)**:",
+                parse_mode="Markdown",
+                reply_markup=skip_markup
+            )
+            return
+
+        elif step == 'id_back':
+            state['data']['id_back_file_id'] = file_id
+            complete_order(chat_id, state['data'])
+            return
+
+    bot.reply_to(message, "شكراً لإرسال الصورة يا فندم! لو حابب تطلب تعاقد أو تستفسر عن العروض اضغط /start 🍊")
 
 # ----------------- معالجة النصوص وتسجيل العملاء -----------------
 
@@ -295,70 +379,29 @@ def handle_messages(message):
         state = CUSTOMER_STATES[chat_id]
         step = state.get('step')
 
-        if step == 'name':
-            state['data']['name'] = user_text
-            state['step'] = 'landline'
-            bot.send_message(chat_id, "☎️ ممتاز يا فندم. من فضلك اكتب **رقم التليفون الأرضي (مع كود المحافظة، مثلاً 02 أو 013 أو 03...)**:")
-            return
-
-        elif step == 'landline':
+        if step == 'landline':
             state['data']['landline'] = user_text
             state['step'] = 'mobile'
-            bot.send_message(chat_id, "📱 تسلم يا غالي. اكتب **رقم الموبايل / واتساب** للتواصل السريع وتحديد موعد التركيب:")
+            bot.send_message(chat_id, "📱 ممتاز يا فندم. اكتب الآن **رقم الموبايل** للتواصل ومتابعة تشغيل الخط:")
             return
 
         elif step == 'mobile':
             state['data']['mobile'] = user_text
-            state['step'] = 'type'
-            bot.send_message(chat_id, "🔄 اختر **نوع الخط** من الأزرار التالية:", reply_markup=build_type_markup())
-            return
-
-        elif step == 'address':
-            state['data']['address'] = user_text
-            lead_data = state['data']
-            lead_data['user_id'] = message.from_user.id
-            lead_data['username'] = message.from_user.username or 'لا يوجد'
-            lead_data['date'] = datetime.now().strftime('%Y-%m-%d %I:%M %p')
-            
-            # حفظ في السجل المحلي
-            save_lead(lead_data)
-            del CUSTOMER_STATES[chat_id]
-
-            # تأكيد للعميل
-            confirm_markup = types.InlineKeyboardMarkup()
-            confirm_markup.add(
-                types.InlineKeyboardButton("💬 مراسلة المندوب واتساب فوراً", url=f"https://wa.me/2{WHATSAPP_NUMBER}?text=أهلاً،%20أنا%20سجلت%20طلب%20تعاقد%20على%20البوت%20وحابب%20أأكد%20الطلب"),
-                types.InlineKeyboardButton("🏠 الصفحة الرئيسية", callback_data="menu_home")
-            )
+            state['step'] = 'id_front'
+            skip_markup = types.InlineKeyboardMarkup()
+            skip_markup.add(types.InlineKeyboardButton("📲 سأرسل البطاقة لاحقاً عبر الواتساب", callback_data="skip_id_photo"))
             bot.send_message(
                 chat_id,
-                "🎉 *ألف مبروك يا فندم! تم تسجيل طلب تعاقدك بنجاح.* 🥳\n\n"
-                "مندوب أورنج المعتمد هيتواصل مع حضرتك هاتفياً أو عبر الواتساب لتأكيد موعد استلام الراوتر والتركيب.\n"
-                "لو حابب تتواصل فوراً مع المندوب اضغط على الزر تحت 👇",
+                "📸 خطوة أخيرة للتعاقد: **ابعت صورة البطاقة (الوجه الأمامي / وش البطاقة)** واضحة:",
                 parse_mode="Markdown",
-                reply_markup=confirm_markup
+                reply_markup=skip_markup
             )
+            return
 
-            # إشعار فوري للأدمن (أحمد) على حسابه في التليجرام
-            try:
-                raw_mob = lead_data.get('mobile', '')
-                clean_mob = raw_mob.replace(' ', '').replace('+', '').lstrip('0')
-                admin_alert = (
-                    f"🚨 <b>طلب تعاقد جديد - عميل Orange DSL!</b> 🚀\n"
-                    f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"👤 <b>اسم العميل:</b> {lead_data.get('name')}\n"
-                    f"☎️ <b>رقم الأرضي:</b> <code>{lead_data.get('landline')}</code>\n"
-                    f"📱 <b>الموبايل:</b> <code>{lead_data.get('mobile')}</code>\n"
-                    f"📦 <b>الباقة:</b> {lead_data.get('package')}\n"
-                    f"🔄 <b>النوع:</b> {lead_data.get('type')}\n"
-                    f"📍 <b>العنوان:</b> {lead_data.get('address')}\n"
-                    f"⏰ <b>التاريخ:</b> {lead_data.get('date')}\n"
-                    f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"📲 <a href='https://wa.me/20{clean_mob}'>اضغط هنا لمراسلة العميل واتساب فوراً</a>"
-                )
-                bot.send_message(ADMIN_ID, admin_alert, parse_mode="HTML")
-            except Exception as ex:
-                print(f"Error alerting admin: {ex}")
+        elif step in ['id_front', 'id_back']:
+            # إذا أرسل نصاً بدلاً من صورة في مرحلة البطاقة
+            state['data']['id_note'] = user_text
+            complete_order(chat_id, state['data'])
             return
 
     # الرد عبر الذكاء الاصطناعي الخاص بأورنج
