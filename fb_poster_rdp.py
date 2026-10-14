@@ -158,6 +158,32 @@ def run_rdp_poster():
     page.goto("https://www.facebook.com", wait_until="domcontentloaded", timeout=45000)
     time.sleep(5)
 
+    # التحقق من شاشة المتابعة أو تسجيل الدخول وإدخال كلمة السر تلقائياً
+    try:
+        cont_btn = page.locator("text=متابعة").first
+        if cont_btn.is_visible():
+            print("[*] Clicking continue on profile chooser...")
+            cont_btn.click()
+            time.sleep(3)
+        
+        pass_input = page.locator("input[type='password']").first
+        if pass_input.is_visible():
+            print("[*] Re-authenticating with password...")
+            pass_input.fill("Ahmed@12#")
+            time.sleep(1)
+            login_btn = page.locator("div[role='button']:has-text('تسجيل الدخول'), button:has-text('تسجيل الدخول')").first
+            if login_btn.is_visible():
+                login_btn.click()
+            else:
+                page.keyboard.press("Enter")
+            time.sleep(8)
+            new_cookies = context.cookies()
+            if any(c.get("name") == "c_user" for c in new_cookies):
+                fb_cookies_manager.save_new_cookies(new_cookies)
+                print("[+] Saved fresh cookies after auto-login!")
+    except Exception as auth_err:
+        print(f"[!] Warning checking auth: {auth_err}")
+
     if "login" in page.url or "checkpoint" in page.url:
         print("[!] Cookies are invalid or expired.")
         send_telegram_alert("❌ <b>فشل النشر:</b> الكوكيز المستخدمة منتهية أو تم تسجيل الخروج. يرجى إرسال كوكيز جديدة.")
@@ -231,8 +257,7 @@ def run_rdp_poster():
 
                 if not box_clicked:
                     print("[!] Post box not accessible (pending admin approval or restricted). Moving next.")
-                    mark_posted(group_url)
-                    # فاصل زمني قصير 15 ثانية للجروبات المغلقة
+                    # فاصل زمني قصير 15 ثانية للجروبات التي تحتاج موافقة أدمن
                     time.sleep(15)
                     continue
 
