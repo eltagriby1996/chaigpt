@@ -37,13 +37,13 @@ def send_telegram_alert(message: str):
     except Exception as e:
         print(f"[!] Telegram notify error: {e}")
 
-# ----------------- نص البوست المعتمد والمثالي بدون روابط خارجية -----------------
+# ----------------- نص البوست المعتمد والمثالي مع رابط واتساب مباشر -----------------
 POST_TEXT = """وفّر نص فاتورتك الشهرية مع أقوى عروض الإنترنت المنزلي من Orange DSL 🍊🔥
 
 عرض التوفير الأكبر (سواء خط أرضي جديد أو تحويل من شركتك الحالية):
 ✅ شهر مجاناً بالكامل بدون اشتراك
 ✅ خصم 50% لمدة 6 شهور
-✅ التحويل بيتم خلال 48 ساعة بدون انقطاع للخدمة
+✅ التحويل بيتم خلال 48 ساعة بدون انقطاع للخدمة وبنفس رقمك الأرضي
 
 📊 الأسعار شاملة الضريبة:
 • 200 جيجا ⬅️ 211 جنيه
@@ -52,8 +52,9 @@ POST_TEXT = """وفّر نص فاتورتك الشهرية مع أقوى عرو�
 • 500 جيجا ⬅️ 422 جنيه
 • 750 جيجا ⬅️ 591 جنيه
 
-📩 للحجز والاستعلام تواصل معنا واتساب:
-01003061972"""
+📩 للحجز والاستعلام تواصل معنا واتساب مباشرة بضغطة واحدة:
+wa.me/201003061972
+أو اتصال: 01003061972"""
 
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
 GROUPS_FILE = os.path.join(WORKSPACE_DIR, "groups.txt")
@@ -331,6 +332,18 @@ def run_rdp_poster():
                         except Exception as e2:
                             print(f"[!] Fallback input error: {e2}")
 
+                # إزالة أي كارت معاينة رابط خارجي إن وُجد للحفاظ على مظهر الصورة النقي
+                try:
+                    page.evaluate("""() => {
+                        const removeCardBtns = Array.from(document.querySelectorAll("div[role='dialog'] div[aria-label*='إزالة'], div[role='dialog'] div[aria-label*='حذف'], div[role='dialog'] div[aria-label*='Remove']"));
+                        for (let b of removeCardBtns) {
+                            b.click();
+                        }
+                    }""")
+                    time.sleep(1)
+                except Exception:
+                    pass
+
                 # 5. النقر على زر النشر
                 published = page.evaluate("""() => {
                     const btns = Array.from(document.querySelectorAll("div[role='button']"));
@@ -351,6 +364,28 @@ def run_rdp_poster():
                     mark_posted(group_url)
                     total_posted_session += 1
                     print(f"[+] Successfully posted to: {group_url}")
+
+                    # محاولة وضع تعليق أول فوري برابط الواتساب المباشر لسهولة النقر
+                    try:
+                        comment_written = page.evaluate("""() => {
+                            const cboxes = Array.from(document.querySelectorAll("div[role='textbox'], div[contenteditable='true']"));
+                            const box = cboxes.find(el => {
+                                const aria = el.getAttribute('aria-label') || '';
+                                return aria.includes('تعليق') || aria.includes('Comment');
+                            });
+                            if (box) {
+                                box.focus();
+                                return true;
+                            }
+                            return false;
+                        }""")
+                        if comment_written:
+                            page.keyboard.type("📩 للحجز والاستعلام السريع اضغط هنا للتواصل واتساب مباشرة: https://wa.me/201003061972", delay=10)
+                            time.sleep(1)
+                            page.keyboard.press("Enter")
+                            print("[+] First comment with 1-click WhatsApp link posted!")
+                    except Exception as c_err:
+                        print(f"[*] Note: First comment optional skip: {c_err}")
 
                     cooldown_sec = random.randint(240, 360) # 4 إلى 6 دقائق أمان
                     cooldown_min = cooldown_sec // 60
