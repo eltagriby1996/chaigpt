@@ -165,24 +165,7 @@ jobs:
             $errBody = @{ chat_id = $chatId; text = $alertMsg; parse_mode = "HTML" } | ConvertTo-Json
             Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $errBody
         } else {
-            $message = @"
-🚀 <b>تم تشغيل الأرديبي والبوتات بنجاح!</b>
-
-🖥 <b>IP / Port:</b>
-<code>$rdpAddress</code>
-
-👤 <b>Username:</b>
-<code>monged123</code>
-
-🔑 <b>Password:</b>
-<code>Ahmed@123</code>
-
-📁 <b>ملاحظة:</b> ملفاتك السابقة محفوظة في مجلد <code>SavedWork</code> على سطح المكتب.
-🤖 <b>بوت الذكاء الاصطناعي:</b> شغال معك هنا (@starter_rdppbot)
-🍊 <b>بوت مبيعات أورنج DSL:</b> شغال ومستعد لاستقبال العملاء (@OrangeDsI_bot)
-
-⏱ <b>المدة:</b> 5 ساعات و 45 دقيقة
-"@
+            $message = "🚀 <b>تم تشغيل الأرديبي والبوتات بنجاح!</b>`n`n🖥 <b>IP / Port:</b>`n<code>$rdpAddress</code>`n`n👤 <b>Username:</b>`n<code>monged123</code>`n`n🔑 <b>Password:</b>`n<code>Ahmed@123</code>`n`n📁 <b>ملاحظة:</b> ملفاتك السابقة محفوظة في مجلد <code>SavedWork</code> على سطح المكتب.`n🤖 <b>بوت الذكاء الاصطناعي:</b> شغال معك هنا (@starter_rdppbot)`n🍊 <b>بوت مبيعات أورنج DSL:</b> شغال ومستعد لاستقبال العملاء (@OrangeDsI_bot)`n`n⏱ <b>المدة:</b> 5 ساعات و 45 دقيقة"
             $body = @{ chat_id = $chatId; text = $message; parse_mode = "HTML" } | ConvertTo-Json
             Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $body
         }
@@ -207,21 +190,7 @@ jobs:
                     if ($tunnel.tunnels.Count -gt 0) {
                         $rdpAddress = $tunnel.tunnels[0].public_url -replace "tcp://", ""
                         if (-not [string]::IsNullOrEmpty($rdpAddress)) {
-                            $message = @"
-🚀 <b>تم ربط نفق الأرديبي بنجاح!</b>
-
-🖥 <b>IP / Port:</b>
-<code>$rdpAddress</code>
-
-👤 <b>Username:</b>
-<code>monged123</code>
-
-🔑 <b>Password:</b>
-<code>Ahmed@123</code>
-
-📁 <b>ملاحظة:</b> ملفاتك السابقة محفوظة في مجلد <code>SavedWork</code> على سطح المكتب.
-⏱ <b>المدة:</b> 5 ساعات و 45 دقيقة
-"@
+                            $message = "🚀 <b>تم ربط نفق الأرديبي بنجاح!</b>`n`n🖥 <b>IP / Port:</b>`n<code>$rdpAddress</code>`n`n👤 <b>Username:</b>`n<code>monged123</code>`n`n🔑 <b>Password:</b>`n<code>Ahmed@123</code>`n`n📁 <b>ملاحظة:</b> ملفاتك السابقة محفوظة في مجلد <code>SavedWork</code> على سطح المكتب.`n⏱ <b>المدة:</b> 5 ساعات و 45 دقيقة"
                             $body = @{ chat_id = $chatId; text = $message; parse_mode = "HTML" } | ConvertTo-Json
                             Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $body
                             $sentRdpNotification = $true
