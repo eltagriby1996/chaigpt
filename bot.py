@@ -340,10 +340,32 @@ def handle_status(message):
         f"🤖 <b>أوامر التحكم السريع:</b>\n"
         f"▶️ /start_poster - تشغيل النشر الآن\n"
         f"⏹️ /stop_poster - إيقاف النشر مؤقتاً\n"
+        f"🖥️ /rdp - عرض عنوان وبيانات اتصال الأرديبي\n"
         f"🔄 /update - سحب التحديثات وتحديث السيرفر\n"
         f"ℹ️ /status - تحديث هذه الإحصائيات"
     )
     bot.reply_to(message, status_text, parse_mode="HTML")
+
+@bot.message_handler(commands=['rdp', 'ip', 'server'])
+def handle_rdp_command(message):
+    if not is_allowed(message.from_user.id):
+        return
+    try:
+        r = requests.get("http://localhost:4040/api/tunnels", timeout=5)
+        tunnels = r.json().get("tunnels", [])
+        if tunnels:
+            addr = tunnels[0].get("public_url", "").replace("tcp://", "")
+            msg = (
+                f"🚀 <b>بيانات الأرديبي الحالية:</b>\n\n"
+                f"🖥 <b>IP / Port:</b>\n<code>{addr}</code>\n\n"
+                f"👤 <b>Username:</b>\n<code>monged123</code>\n\n"
+                f"🔑 <b>Password:</b>\n<code>Ahmed@123</code>"
+            )
+            bot.reply_to(message, msg, parse_mode="HTML")
+            return
+    except Exception:
+        pass
+    bot.reply_to(message, "⚠️ جاري ربط نفق Ngrok.. أعد المحاولة بعد لحظات.")
 
 @bot.message_handler(commands=['start_poster'])
 def handle_start_poster(message):

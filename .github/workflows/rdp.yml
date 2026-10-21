@@ -141,7 +141,7 @@ jobs:
         Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --log=stdout --log-format=term" -RedirectStandardOutput "ngrok.log" -RedirectStandardError "ngrok_err.log" -WindowStyle Hidden
 
         $rdpAddress = ""
-        for ($i = 0; $i -lt 25; $i++) {
+        for ($i = 0; $i -lt 40; $i++) {
             Start-Sleep -Seconds 3
             try {
                 $tunnel = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels" -ErrorAction SilentlyContinue
@@ -161,29 +161,28 @@ jobs:
             if (Test-Path ngrok.log) { Get-Content ngrok.log -Tail 15 }
             if (Test-Path ngrok_err.log) { Get-Content ngrok_err.log -Tail 15 }
 
-            $alertMsg = "⚙️ <b>تم إطلاق سيرفر الأرديبي بنجاح!</b>`n`n🤖 البوتات والنشر التلقائي للفيسبوك يعملون في الخلفية 24/7.`nجاري محاولة الاتصال بنفق Ngrok تلقائياً."
+            $alertMsg = "⚙️ <b>تم إطلاق سيرفر الأرديبي بنجاح!</b>`n`n🤖 البوتات تعمل في الخلفية.`n⏳ جاري ربط نفق Ngrok وسيتم إرسال الـ IP فوراً..."
             $errBody = @{ chat_id = $chatId; text = $alertMsg; parse_mode = "HTML" } | ConvertTo-Json
             Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $errBody
         } else {
             $message = @"
-        🚀 <b>تم تشغيل الأرديبي والبوتات بنجاح!</b>
+🚀 <b>تم تشغيل الأرديبي والبوتات بنجاح!</b>
 
-        🖥 <b>IP / Port:</b>
-        <code>$rdpAddress</code>
+🖥 <b>IP / Port:</b>
+<code>$rdpAddress</code>
 
-        👤 <b>Username:</b>
-        <code>monged123</code>
+👤 <b>Username:</b>
+<code>monged123</code>
 
-        🔑 <b>Password:</b>
-        <code>Ahmed@123</code>
+🔑 <b>Password:</b>
+<code>Ahmed@123</code>
 
-        📁 <b>ملاحظة:</b> ملفاتك السابقة محفوظة في مجلد <code>SavedWork</code> على سطح المكتب.
-        🤖 <b>بوت الذكاء الاصطناعي:</b> شغال معك هنا (@starter_rdppbot)
-        🍊 <b>بوت مبيعات أورنج DSL:</b> شغال ومستعد لاستقبال العملاء (@OrangeDsI_bot)
-        📢 <b>النشر التلقائي للفيسبوك:</b> شغال في الخلفية 24/7 مع إشعارات لكل جروب!
+📁 <b>ملاحظة:</b> ملفاتك السابقة محفوظة في مجلد <code>SavedWork</code> على سطح المكتب.
+🤖 <b>بوت الذكاء الاصطناعي:</b> شغال معك هنا (@starter_rdppbot)
+🍊 <b>بوت مبيعات أورنج DSL:</b> شغال ومستعد لاستقبال العملاء (@OrangeDsI_bot)
 
-        ⏱ <b>المدة:</b> 5 ساعات و 45 دقيقة
-        "@
+⏱ <b>المدة:</b> 5 ساعات و 45 دقيقة
+"@
             $body = @{ chat_id = $chatId; text = $message; parse_mode = "HTML" } | ConvertTo-Json
             Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $body
         }
@@ -192,11 +191,45 @@ jobs:
       if: always()
       run: |
         Write-Host "🚀 RDP Session is active! Starting heartbeat monitor loop..."
+        $botToken = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("ODc5NTAyNjE5OTpBQUVvWTRjMGZPU0ViMXQya2RxMzZPOE9uRVdieENrSFF4RQ=="))
+        $chatId = "7815806102"
+        $sentRdpNotification = $false
+
         $totalMinutes = 345 # 5 ساعات و 45 دقيقة
         for ($m = 1; $m -le $totalMinutes; $m++) {
             Start-Sleep -Seconds 60
             Write-Host "⏱️ Heartbeat: RDP is active ($m / $totalMinutes minutes elapsed)..."
             
+            # فحص نفق Ngrok وإرسال الـ IP فور توفره في حال لم يتم إرساله في البداية
+            if (-not $sentRdpNotification) {
+                try {
+                    $tunnel = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels" -ErrorAction SilentlyContinue
+                    if ($tunnel.tunnels.Count -gt 0) {
+                        $rdpAddress = $tunnel.tunnels[0].public_url -replace "tcp://", ""
+                        if (-not [string]::IsNullOrEmpty($rdpAddress)) {
+                            $message = @"
+🚀 <b>تم ربط نفق الأرديبي بنجاح!</b>
+
+🖥 <b>IP / Port:</b>
+<code>$rdpAddress</code>
+
+👤 <b>Username:</b>
+<code>monged123</code>
+
+🔑 <b>Password:</b>
+<code>Ahmed@123</code>
+
+📁 <b>ملاحظة:</b> ملفاتك السابقة محفوظة في مجلد <code>SavedWork</code> على سطح المكتب.
+⏱ <b>المدة:</b> 5 ساعات و 45 دقيقة
+"@
+                            $body = @{ chat_id = $chatId; text = $message; parse_mode = "HTML" } | ConvertTo-Json
+                            Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -ContentType "application/json; charset=utf-8" -Body $body
+                            $sentRdpNotification = $true
+                        }
+                    }
+                } catch {}
+            }
+
             # مراقبة وإعادة تشغيل البوتات تلقائياً لو توقفت لأي سبب
             $pyProcs = Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" -ErrorAction SilentlyContinue
             $botRunning = $pyProcs | Where-Object { $_.CommandLine -like "*bot.py*" }
@@ -210,14 +243,6 @@ jobs:
                 Write-Host "⚠️ Re-launching Orange DSL Bot..."
                 Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\orange_bot.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
             }
-
-            # if (Test-Path "$env:GITHUB_WORKSPACE\fb_cookies.json") {
-            #     $fbRunning = $pyProcs | Where-Object { $_.CommandLine -like "*fb_poster_rdp.py*" }
-            #     if (-not $fbRunning) {
-            #         Write-Host "⚠️ Re-launching Facebook Auto Poster..."
-            #         Start-Process -FilePath "python" -ArgumentList "$env:GITHUB_WORKSPACE\fb_poster_rdp.py" -WorkingDirectory "$env:GITHUB_WORKSPACE" -WindowStyle Hidden
-            #     }
-            # }
 
             # مراقبة نفق Ngrok لضمان استمرار الاتصال
             $ngrokRunning = Get-Process -Name "ngrok" -ErrorAction SilentlyContinue
