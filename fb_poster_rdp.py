@@ -108,33 +108,8 @@ def get_target_groups():
         return [l.strip() for l in f if l.strip().startswith("http")]
 
 def run_rdp_poster():
-    # إزالة ملف الإيقاف عند البدء الجديد
-    if os.path.exists(STOP_FILE):
-        try:
-            os.remove(STOP_FILE)
-        except Exception:
-            pass
-
-    print("[*] Starting RDP Autonomous Facebook Poster with Smart-Publish Engine...")
-    
-    cookies = fb_cookies_manager.get_cookies()
-    if not cookies:
-        print("[!] No Facebook cookies available.")
-        send_telegram_alert("⚠️ <b>تنبيه من الأرديبي:</b> لم يتم العثور على كوكيز فيسبوك. يرجى تزويدها عبر الشات.")
-        return
-
-    all_groups = get_target_groups()
-    posted = get_posted_groups()
-    pending = [g for g in all_groups if g not in posted]
-
-    startup_msg = (
-        f"🚀 <b>بدء تشغيل سكريبت النشر التلقائي الذكي على الأرديبي!</b>\n\n"
-        f"📊 <b>إجمالي الجروبات:</b> {len(all_groups)} جروب\n"
-        f"✅ <b>تم النشر سابقاً:</b> {len(posted)} جروب\n"
-        f"🎯 <b>المتبقي للنشر:</b> {len(pending)} جروب\n\n"
-        f"⚡ <b>الحالة:</b> السكريبت يبدأ العمل الفوري الآن وستصلك رسالة تأكيد بكل جروب!"
-    )
-    send_telegram_alert(startup_msg)
+    print("[*] Facebook auto-poster is disabled by user.")
+    return
 
     from playwright.sync_api import sync_playwright
 

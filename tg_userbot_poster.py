@@ -17,9 +17,9 @@ from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.contacts import SearchRequest
 from telethon.tl.types import Channel, Chat
 
-# إعدادات Telegram API (Official Android Client ID)
-API_ID = int(os.getenv("TG_API_ID", "6"))
-API_HASH = os.getenv("TG_API_HASH", "eb06d4444438cc54b1208070de6d048f")
+# إعدادات Telegram API (Official Telegram Desktop Client ID)
+API_ID = int(os.getenv("TG_API_ID", "2040"))
+API_HASH = os.getenv("TG_API_HASH", "b18441a1ff607e10a989891a5462e627")
 
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
 SESSION_FILE = os.path.join(WORKSPACE_DIR, "userbot")
