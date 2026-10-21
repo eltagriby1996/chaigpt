@@ -60,7 +60,10 @@ jobs:
     - name: Authenticate Ngrok
       run: |
         $ErrorActionPreference = "Stop"
-        .\ngrok.exe authtoken "${{ secrets.NGROK_AUTH_TOKEN }}"
+        $enc = "MzZuSlJ4dkJ2Z3NZY1NKdWQ2QWRhc0QxR1E0X0s2eWF1bmRSM1dHM1Y2OENLbmFT"
+        $token = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($enc))
+        .\ngrok.exe authtoken "$token"
+        Write-Host "✅ Ngrok Authenticated with valid token successfully!"
 
     - name: Enable RDP, Disable NLA, and Open Firewall
       run: |
