@@ -423,7 +423,9 @@ def start_verification_task(message, url: str):
 
     def worker():
         try:
+            import importlib
             import kipas_solver
+            importlib.reload(kipas_solver)
             res = kipas_solver.solve_kipas_verification(url)
             screenshot_path = res.get("screenshot")
             caption = res.get("message", "")
