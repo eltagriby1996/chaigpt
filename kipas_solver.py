@@ -5,6 +5,13 @@ import re
 import html
 from playwright.sync_api import sync_playwright
 
+if sys.platform.startswith('win'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def solve_kipas_verification(url: str, update_callback=None) -> dict:
@@ -16,7 +23,13 @@ def solve_kipas_verification(url: str, update_callback=None) -> dict:
     - Automated step clicking (Continue -> Continue -> Verify)
     """
     def log(msg: str):
-        print(f"[*] {msg}")
+        try:
+            print(f"[*] {msg}")
+        except Exception:
+            try:
+                print(f"[*] {msg.encode('ascii', 'ignore').decode('ascii')}")
+            except Exception:
+                pass
         if update_callback:
             try:
                 update_callback(msg)
@@ -53,38 +66,21 @@ def solve_kipas_verification(url: str, update_callback=None) -> dict:
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
             )
 
-            # Instantly close any new tabs opened by scripts
-            context.on("page", lambda new_page: new_page.close() if new_page else None)
-
-            page = context.new_page()
-
-            # Prevent popups and clickjacking via JavaScript overrides
-            page.add_init_script("""
+            # Prevent popups and clickjacking via context init script
+            context.add_init_script("""
                 window.open = function() { console.log('Blocked window.open'); return null; };
                 window.alert = function() { return true; };
                 window.confirm = function() { return true; };
                 window.prompt = function() { return null; };
             """)
 
-            # Network level ad-blocker: block known ad domains and trackers
-            def block_ad_requests(route):
-                req_url = route.request.url.lower()
-                ad_keywords = [
-                    "doubleclick", "adsterra", "popads", "onclickads", "monetag",
-                    "hilltopads", "propellerads", "exoclick", "google-analytics",
-                    "googlesyndication", "adservice", "trafficjunky", "adkeeper",
-                    "mgid", "adskeeper", "revenuehits", "criteo", "outbrain",
-                    "taboola", "clickadu", "richaudience", "adnxs", "bidvertiser"
-                ]
-                if any(kw in req_url for kw in ad_keywords):
-                    route.abort()
-                else:
-                    route.continue_()
+            page = context.new_page()
 
-            try:
-                page.route("**/*", block_ad_requests)
-            except Exception:
-                pass
+            # Instantly close any extra popup tabs (never close main page)
+            context.on("page", lambda p: p.close() if (p and p != page) else None)
+
+            # We do NOT abort network ad scripts to prevent triggering "DNS BLOCK DETECTED" (CODE: ADS_CHECK)
+            # Instead, popups are 100% neutralized via window.open = null and auto-closing popup tabs.
 
             log(f"جاري فتح الرابط: {url[:60]}...")
             page.goto(url, wait_until="domcontentloaded", timeout=40000)
@@ -141,13 +137,13 @@ def solve_kipas_verification(url: str, update_callback=None) -> dict:
                             if not b.is_visible():
                                 continue
                             txt = b.inner_text().strip()
-                            # Match Continue / Verify in English or Arabic
-                            if txt in ["Continue", "Verify", "متابعة", "تحقق"]:
+                            # Match Continue / Verify / Try again in English or Arabic
+                            if txt in ["Continue", "Verify", "Try again", "متابعة", "تحقق", "إعادة المحاولة"]:
                                 is_disabled = b.is_disabled()
                                 if not is_disabled:
                                     target_btn = b
                                     break
-                            elif ("Continue" in txt or "Verify" in txt or "متابعة" in txt or "تحقق" in txt) and not re.search(r"\d+", txt):
+                            elif ("Continue" in txt or "Verify" in txt or "Try again" in txt or "متابعة" in txt or "تحقق" in txt) and not re.search(r"\d+", txt):
                                 if not b.is_disabled():
                                     target_btn = b
                                     break
