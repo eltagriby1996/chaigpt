@@ -63,8 +63,10 @@ def solve_kipas_verification(url: str, update_callback=None) -> dict:
 
             context = browser.new_context(
                 viewport={"width": 1280, "height": 900},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                accept_downloads=False
             )
+            context.on("download", lambda d: d.cancel())
 
             # Prevent popups and clickjacking via context init script
             context.add_init_script("""
@@ -75,6 +77,7 @@ def solve_kipas_verification(url: str, update_callback=None) -> dict:
             """)
 
             page = context.new_page()
+            page.on("download", lambda d: d.cancel())
 
             # Instantly close any extra popup tabs (never close main page)
             context.on("page", lambda p: p.close() if (p and p != page) else None)
