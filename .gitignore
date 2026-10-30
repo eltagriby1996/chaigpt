@@ -6,3 +6,6 @@ Thumbs.db
 .vercel
 fb_profile/
 fb_cookies.json
+kipas_browser_profile/
+kipas_result_*.png
+ublock_extension/

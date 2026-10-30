@@ -13,6 +13,8 @@ if sys.platform.startswith('win'):
 import json
 import time
 import base64
+import threading
+import re
 import requests
 import telebot
 from urllib.parse import quote
@@ -201,6 +203,7 @@ def send_welcome(message):
         "🎙️ *الريكوردات والفويس:* ابعت أي فويس نوت، هسمعه وأفهمه وأجاوبك بالعربي.\n"
         "🎨 *توليد الصور:* اكتب `/image` متبوعاً بالوصف وهعملهالك 4K ونظيفة بدون أي لوجو.\n"
         "👁️ *فحص الصور:* ابعت أي صورة مع سؤالك وهشرحهالك بالتفصيل.\n"
+        "🛡️ *التحقق التلقائي للألعاب والروابط:* ابعت أي لينك تحقق (زي Kipas) أو اكتب `/verify رابط` وهفتحه بمانع إعلانات وأخلصهولك وأبعتلك التوثيق والسكرين شوت فوراً!\n"
         "🧹 *مسح الذاكرة:* اكتب `/clear` لو تحب تمسح الذاكرة وتبدأ محادثة جديدة على مية بيضا.\n\n"
         "⚡ *شغال 24/7 من سيرفر الأرديبي وبدون حدود (1500 رسالة يومياً)!*"
     )
@@ -401,6 +404,59 @@ def handle_update(message):
     except Exception as e:
         bot.reply_to(message, f"❌ خطأ أثناء التحديث: {e}")
 
+# ----------------- نظام التحقق التلقائي مع مانع الإعلانات (uBlock Origin) -----------------
+def start_verification_task(message, url: str):
+    chat_id = message.chat.id
+    try:
+        bot.reply_to(
+            message,
+            "⏳ <b>تم استلام رابط التحقق بنجاح!</b>\n"
+            "🛡️ جاري تشغيل المتصفح المحمي بمانع الإعلانات (uBlock Origin) لتخطي كافة الإعلانات والنوافذ وإتمام التحقق بالكامل...",
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
+    def worker():
+        try:
+            import kipas_solver
+            res = kipas_solver.solve_kipas_verification(url)
+            screenshot_path = res.get("screenshot")
+            caption = res.get("message", "")
+            
+            if screenshot_path and os.path.exists(screenshot_path):
+                try:
+                    with open(screenshot_path, "rb") as photo:
+                        bot.send_photo(chat_id, photo, caption=caption, parse_mode="HTML", reply_to_message_id=message.message_id)
+                    return
+                except Exception as ex_photo:
+                    print(f"[!] Error sending screenshot: {ex_photo}")
+
+            bot.reply_to(message, caption, parse_mode="HTML")
+        except Exception as e:
+            bot.reply_to(message, f"❌ حدث خطأ غير متوقع أثناء معالجة رابط التحقق:\n<code>{e}</code>", parse_mode="HTML")
+
+    threading.Thread(target=worker, daemon=True).start()
+
+@bot.message_handler(commands=['verify', 'kipas'])
+def handle_verify_command(message):
+    if not is_allowed(message.from_user.id):
+        return
+    parts = message.text.split(maxsplit=1)
+    if len(parts) > 1 and parts[1].strip().startswith("http"):
+        url = parts[1].strip()
+        start_verification_task(message, url)
+    else:
+        bot.reply_to(
+            message,
+            "ℹ️ <b>طريقة استخدام ميزة التحقق التلقائي:</b>\n\n"
+            "• اكتب <code>/verify</code> متبوعاً بالرابط، أو\n"
+            "• ابعت الرابط في الشات مباشرة بدون أي أوامر!\n\n"
+            "مثال:\n"
+            "<code>/verify https://kipascommunity.com/verify/?token=...</code>",
+            parse_mode="HTML"
+        )
+
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
     """استقبال ملف الكوكيز fb_cookies.json وتشغيل النشر التلقائي فوراً على الأرديبي"""
@@ -427,12 +483,18 @@ def handle_document(message):
 
 @bot.message_handler(func=lambda msg: True)
 def handle_text(message):
-    """الرد على الرسائل النصية والتعرف التلقائي على نصوص الكوكيز"""
+    """الرد على الرسائل النصية والتعرف التلقائي على نصوص الكوكيز وروابط التحقق"""
     if not is_allowed(message.from_user.id):
         return
 
     text = message.text.strip() if message.text else ""
     
+    # فحص إذا أرسل المستخدم رابط تحقق (مثل kipascommunity أو أي رابط يحتوي verify)
+    url_match = re.search(r"https?://[^\s]+", text)
+    if url_match and ("kipascommunity" in text.lower() or "verify" in text.lower()):
+        start_verification_task(message, url_match.group(0))
+        return
+
     # فحص إذا أرسل المستخدم كود كوكيز فيسبوك كنص
     if ("c_user" in text and "xs" in text) and (text.startswith("[") or text.startswith("{") or "facebook.com" in text):
         try:
