@@ -197,14 +197,32 @@ def fast_verify(url: str, headless: bool = True, on_progress=None) -> dict:
     return result
 
 if __name__ == "__main__":
+    test_link = ""
     if len(sys.argv) > 1:
         test_link = sys.argv[1].strip()
-        print(f"Running Fast Solver on: {test_link}")
-        res = fast_verify(test_link, headless=False)
-        print("\n--- RESULT ---")
-        print("Success:", res["success"])
-        print("Status:", res["status"])
-        print("Message:\n", res["message"])
-        print("Screenshot:", res["screenshot"])
     else:
-        print("Usage: python kipas_fast_solver.py <verification_url>")
+        print("=" * 60)
+        print("       KIPAS FOOTBALL - FAST VERIFICATION SOLVER")
+        print("=" * 60)
+        try:
+            test_link = input("\nPaste Kipas Verification URL (ضع رابط التحقق هنا): ").strip()
+        except Exception:
+            pass
+
+    test_link = test_link.strip('"').strip("'").strip()
+
+    if not test_link or not test_link.startswith("http"):
+        print("\n[!] Error: Invalid or empty URL provided. Please provide a valid link starting with http/https.")
+        input("\nPress Enter to exit...")
+        sys.exit(1)
+
+    print(f"\n[*] Running Fast Solver on: {test_link[:70]}...\n")
+    res = fast_verify(test_link, headless=False)
+    print("\n" + "=" * 60)
+    print("--- RESULT ---")
+    print("Success:", res["success"])
+    print("Status:", res["status"])
+    print("\nMessage:\n" + re.sub(r'<[^>]+>', '', res["message"]))
+    print("Screenshot:", res["screenshot"])
+    print("=" * 60)
+    input("\nPress Enter to exit...")
