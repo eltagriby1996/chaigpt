@@ -15,6 +15,7 @@ import time
 import base64
 import threading
 import re
+import html
 import requests
 import telebot
 from urllib.parse import quote
@@ -399,19 +400,22 @@ def handle_update(message):
         import subprocess
         workspace_dir = os.path.dirname(os.path.abspath(__file__))
         res = subprocess.run(["git", "pull", "origin", "main"], cwd=workspace_dir, capture_output=True, text=True)
-        bot.reply_to(message, f"✅ نتيجة التحديث:\n<code>{res.stdout or res.stderr}</code>", parse_mode="HTML")
+        out_msg = html.escape((res.stdout or res.stderr or "Up to date").strip())
+        bot.reply_to(message, f"✅ نتيجة التحديث:\n<code>{out_msg}</code>\n🚀 جاري إعادة تشغيل البوت بالكود الجديد...", parse_mode="HTML")
         launch_poster()
+        time.sleep(1)
+        os.execv(sys.executable, [sys.executable] + sys.argv)
     except Exception as e:
-        bot.reply_to(message, f"❌ خطأ أثناء التحديث: {e}")
+        bot.reply_to(message, f"❌ خطأ أثناء التحديث: {html.escape(str(e))}", parse_mode="HTML")
 
-# ----------------- نظام التحقق التلقائي مع مانع الإعلانات (uBlock Origin) -----------------
+# ----------------- نظام التحقق التلقائي مع مانع الإعلانات -----------------
 def start_verification_task(message, url: str):
     chat_id = message.chat.id
     try:
         bot.reply_to(
             message,
             "⏳ <b>تم استلام رابط التحقق بنجاح!</b>\n"
-            "🛡️ جاري تشغيل المتصفح المحمي بمانع الإعلانات (uBlock Origin) لتخطي كافة الإعلانات والنوافذ وإتمام التحقق بالكامل...",
+            "🛡️ جاري تشغيل المتصفح المحمي بحاجب الإعلانات لتخطي كافة الإعلانات والنوافذ وإتمام التحقق بالكامل...",
             parse_mode="HTML"
         )
     except Exception:
@@ -430,11 +434,22 @@ def start_verification_task(message, url: str):
                         bot.send_photo(chat_id, photo, caption=caption, parse_mode="HTML", reply_to_message_id=message.message_id)
                     return
                 except Exception as ex_photo:
-                    print(f"[!] Error sending screenshot: {ex_photo}")
+                    print(f"[!] Error sending screenshot HTML: {ex_photo}")
+                    try:
+                        clean_cap = re.sub(r'<[^>]+>', '', caption)
+                        with open(screenshot_path, "rb") as photo:
+                            bot.send_photo(chat_id, photo, caption=clean_cap, reply_to_message_id=message.message_id)
+                        return
+                    except Exception:
+                        pass
 
-            bot.reply_to(message, caption, parse_mode="HTML")
+            try:
+                bot.reply_to(message, caption, parse_mode="HTML")
+            except Exception:
+                bot.reply_to(message, re.sub(r'<[^>]+>', '', caption))
         except Exception as e:
-            bot.reply_to(message, f"❌ حدث خطأ غير متوقع أثناء معالجة رابط التحقق:\n<code>{e}</code>", parse_mode="HTML")
+            err_text = html.escape(str(e))
+            bot.reply_to(message, f"❌ حدث خطأ غير متوقع أثناء معالجة رابط التحقق:\n<code>{err_text}</code>", parse_mode="HTML")
 
     threading.Thread(target=worker, daemon=True).start()
 
