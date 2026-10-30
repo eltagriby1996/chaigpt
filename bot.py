@@ -424,9 +424,9 @@ def start_verification_task(message, url: str):
     def worker():
         try:
             import importlib
-            import kipas_solver
-            importlib.reload(kipas_solver)
-            res = kipas_solver.solve_kipas_verification(url)
+            import kipas_fast_solver
+            importlib.reload(kipas_fast_solver)
+            res = kipas_fast_solver.fast_verify(url)
             screenshot_path = res.get("screenshot")
             caption = res.get("message", "")
             
